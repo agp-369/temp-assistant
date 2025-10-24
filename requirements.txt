@@ -1,0 +1,11 @@
+psutil
+pyttsx3
+SpeechRecognition
+PyAudio
+pvporcupine
+python-dotenv
+fuzzywuzzy
+python-Levenshtein
+customtkinter
+pyautogui
+pywin32; sys_platform == 'win32'
