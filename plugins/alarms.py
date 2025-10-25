@@ -2,6 +2,7 @@ import threading
 import time
 from src.plugin_interface import Plugin
 import re
+import src.notification_manager as notification_manager
 
 class AlarmsPlugin(Plugin):
     """
@@ -39,9 +40,10 @@ class AlarmsPlugin(Plugin):
         return None # Placeholder for more complex parsing
 
     def _set_timer(self, delay, message, assistant):
-        """Sets a timer to speak a message after a delay."""
+        """Sets a timer to speak a message and send a notification after a delay."""
         def on_timer_end():
             assistant.speak(message)
+            notification_manager.send_notification("Nora Reminder", message)
             # Remove timer from active list
             self.alarms = [a for a in self.alarms if a.ident != threading.current_thread().ident]
 
