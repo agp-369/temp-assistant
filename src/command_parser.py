@@ -40,6 +40,12 @@ get_time_patterns = [
 ]
 matcher.add("get_time", get_time_patterns)
 
+# Pattern for teaching a new command
+teach_command_patterns = [
+    [{"LOWER": "teach"}, {"LOWER": "command"}, {"IS_ALPHA": True, "OP": "+"}, {"LOWER": "to"}, {"IS_ALPHA": True, "OP": "+"}]
+]
+matcher.add("teach_command", teach_command_patterns)
+
 
 def parse_command(text):
     """
@@ -59,6 +65,26 @@ def parse_command(text):
     best_match = max(matches, key=lambda m: m[2] - m[1])
     match_id, start, end = best_match
     intent = nlp.vocab.strings[match_id]
+
+    # Special handling for the 'teach_command' intent
+    if intent == "teach_command":
+        span = doc[start:end]
+        # Extract command name and actions
+        command_name_part = []
+        actions_part = []
+        parsing_actions = False
+        for token in span:
+            if token.lower_ == "to":
+                parsing_actions = True
+                continue
+            if not parsing_actions and token.lower_ not in ["teach", "command"]:
+                command_name_part.append(token.text)
+            elif parsing_actions:
+                actions_part.append(token.text)
+
+        command_name = " ".join(command_name_part)
+        actions = " ".join(actions_part).split(" and then ")
+        return intent, (command_name, actions)
 
     # Extract the entity (the part of the text that isn't the keyword)
     span = doc[start:end]

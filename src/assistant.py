@@ -14,6 +14,7 @@ import json
 from dotenv import load_dotenv
 from . import app_discovery
 from . import window_manager
+from . import custom_commands
 from .command_parser import parse_command
 
 load_dotenv()
@@ -31,6 +32,7 @@ class Assistant:
         self.wake_word = self.config.get("wake_word", "porcupine")
         self.output_callback = output_callback
         self.apps = app_discovery.load_cached_apps()
+        self.custom_commands = custom_commands.load_commands()
 
         # Voice Engine Setup
         self.engine = pyttsx3.init()
@@ -130,6 +132,13 @@ class Assistant:
                 self.speak("Please answer with yes or no.")
             return True
 
+        # Check for custom commands first
+        if command_str in self.custom_commands:
+            actions = self.custom_commands[command_str]
+            for action in actions:
+                self.process_command(action)
+            return True
+
         command, args = parse_command(command_str)
 
         if command == "exit":
@@ -161,11 +170,22 @@ class Assistant:
             self.get_date()
         elif command == "open_uwp_app_direct":
             self.open_uwp_app_direct(args)
+        elif command == "teach_command":
+            command_name, actions = args
+            self.teach_command(command_name, actions)
         else:
             self.speak(f"Sorry, I don't know the command: {command_str}")
         return True
 
     # --- Core Commands ---
+    def teach_command(self, name, actions):
+        """Teaches the assistant a new command."""
+        if custom_commands.save_command(name, actions):
+            self.custom_commands = custom_commands.load_commands()  # Reload commands
+            self.speak(f"I've learned a new command: '{name}'.")
+        else:
+            self.speak("I'm sorry, I couldn't save that command.")
+
     def perform_web_search(self, query):
         self.speak(f"Searching online for {query}.")
         search_url = f"https://www.google.com/search?q={query.replace(' ', '+')}"
