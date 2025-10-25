@@ -64,6 +64,8 @@ class Assistant:
         self.vision.start()
         self.auto_lock_thread = threading.Thread(target=self._auto_lock_loop, daemon=True)
         self.auto_lock_thread.start()
+        self.greeting_thread = threading.Thread(target=self._greeting_loop, daemon=True)
+        self.greeting_thread.start()
 
         self.context_thread = threading.Thread(target=self._context_awareness_loop, daemon=True)
         self.context_thread.start()
@@ -255,6 +257,10 @@ class Assistant:
             self.teach_command(command_name, actions)
         elif command == "answer_question":
             self.answer_question(args)
+        elif command == "learn_face":
+            self.speak("Learning your face... Please look at the camera.")
+            response = self.vision.learn_current_user_face(args)
+            self.speak(response)
         else:
             # If no other command was matched, try the conversational AI
             response, self.conversation_history = chitchat.get_chitchat_response(command_str, self.conversation_history)
@@ -504,6 +510,21 @@ class Assistant:
                     is_locked = True
 
             time.sleep(5) # Check every 5 seconds
+
+    def _greeting_loop(self):
+        """Periodically checks for a recognized user and greets them."""
+        greeted_users = []
+        while True:
+            if self.vision.recognized_user and self.vision.recognized_user not in greeted_users:
+                name = self.vision.recognized_user
+                self.speak(f"Welcome back, {name}!")
+                greeted_users.append(name)
+
+            # Reset if no user is present
+            if not self.vision.user_present:
+                greeted_users = []
+
+            time.sleep(3)
 
     def play_on_youtube(self, query):
         """Searches for and plays a video on YouTube."""

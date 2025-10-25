@@ -19,3 +19,5 @@ wikipedia
 pytest
 plyer
 opencv-python
+face_recognition
+dlib
