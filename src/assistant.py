@@ -211,9 +211,21 @@ class Assistant:
         elif command == "teach_command":
             command_name, actions = args
             self.teach_command(command_name, actions)
+        elif command == "answer_question":
+            self.answer_question(args)
         else:
             self.speak(f"Sorry, I don't know the command: {command_str}")
         return True
+
+    def answer_question(self, query):
+        """Answers a direct question using the web_interaction module."""
+        self.speak(f"Looking up {query}...")
+        answer = web_interaction.get_instant_answer(query)
+        if answer:
+            self.speak(answer)
+        else:
+            self.speak(f"I couldn't find a direct answer for '{query}'. I'll perform a web search for you.")
+            self.perform_web_search(query)
 
     # --- Core Commands ---
     def teach_command(self, name, actions):
