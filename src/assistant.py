@@ -80,13 +80,22 @@ class Assistant:
         return plugins
 
     # --- Voice and Speech ---
-    def speak(self, text):
+    def speak(self, text, is_error=False):
+        """Outputs text to the GUI or console, handling errors."""
+        if is_error:
+            text = f"Error: {text}"
+
         if self.output_callback:
             self.output_callback(text)
         else:
             print(f"{self.assistant_name}: {text}")
+
+        # Voice output can be unreliable in some environments, so we wrap it
+        try:
             self.engine.say(text)
             self.engine.runAndWait()
+        except Exception as e:
+            print(f"TTS Error: {e}")
 
     def listen_for_wake_word(self):
         if not PICOVOICE_ACCESS_KEY:
@@ -118,7 +127,7 @@ class Assistant:
                         if not self.process_command(command):
                             break # Exit loop if process_command signals to
         except Exception as e:
-            self.speak(f"An error occurred with the wake word listener: {e}")
+            self.speak(f"An error occurred with the wake word listener: {e}", is_error=True)
         finally:
             if audio_stream is not None:
                 audio_stream.close()
@@ -368,19 +377,24 @@ class Assistant:
                 self.speak(f"An unexpected error occurred while opening {app_name}: {e}")
             return
 
-        # 3. If executable not found, try other methods (ShellExecute, UWP)
-        if sys.platform == "win32":
-            try:
+        # 3. If executable not found, try other platform-specific methods
+        try:
+            if sys.platform == "win32":
                 win32api.ShellExecute(0, "open", app_name, "", "", 1)
                 self.speak(f"Opening {app_name} using Windows ShellExecute...")
                 return
-            except Exception:
-                # If ShellExecute fails, try to open as a UWP app
-                self.open_uwp_app(app_name)
+            elif sys.platform == "darwin": # macOS
+                subprocess.Popen(["open", "-a", app_name])
+                self.speak(f"Opening {app_name}...")
                 return
-
-        # 4. If all else fails, ask about web search
-        self.speak(f"Application '{app_name}' not found. Would you like to search online?")
+            else: # Linux and other OS
+                # This is a simple approach; a more robust solution would search PATH
+                subprocess.Popen([app_name])
+                self.speak(f"Opening {app_name}...")
+                return
+        except Exception:
+             # 4. If all else fails, ask about web search
+            self.speak(f"Application '{app_name}' not found. Would you like to search online?")
         return "WAITING_FOR_WEB_SEARCH_CONFIRMATION"
 
     def close_application(self, app_name):
@@ -404,7 +418,7 @@ class Assistant:
             self.speak(f"Opening {filename}...")
             usage_tracker.track_file_usage(filename)
         except Exception as e:
-            self.speak(f"An error occurred: {e}")
+            self.speak(str(e), is_error=True)
 
     def play_on_youtube(self, query):
         self.speak(f"Playing {query} on YouTube.")
