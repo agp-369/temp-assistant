@@ -80,6 +80,12 @@ move_files_patterns = [
 ]
 matcher.add("move_files", move_files_patterns)
 
+# Pattern for learning a face
+learn_face_patterns = [
+    [{"LOWER": "learn"}, {"LOWER": "my"}, {"LOWER": "face"}, {"LOWER": "as"}, {"IS_ALPHA": True, "OP": "+"}]
+]
+matcher.add("learn_face", learn_face_patterns)
+
 get_memory_patterns = [
     [{"LOWER": {"IN": ["what", "check"]}}, {"LOWER": "is"}, {"LOWER": "the"}, {"LOWER": "memory"}, {"LOWER": "usage"}]
 ]
@@ -147,7 +153,8 @@ def parse_command(text):
         "set_alarm": ["set", "an", "alarm", "for"],
         "play_on_youtube": ["play", "on", "youtube"],
         "find_files": ["find", "my", "files"],
-        "move_files": ["move", "all", "from", "to"]
+        "move_files": ["move", "all", "from", "to"],
+        "learn_face": ["learn", "my", "face", "as"]
     }.get(intent, [])
 
     entity = " ".join([token.text for token in span if token.lower_ not in keywords_to_remove])
