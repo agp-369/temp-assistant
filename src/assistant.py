@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 from . import app_discovery
 from . import window_manager
 from . import custom_commands
+from . import web_interaction
 from .command_parser import parse_command
 
 load_dotenv()
@@ -187,12 +188,32 @@ class Assistant:
             self.speak("I'm sorry, I couldn't save that command.")
 
     def perform_web_search(self, query):
-        self.speak(f"Searching online for {query}.")
-        search_url = f"https://www.google.com/search?q={query.replace(' ', '+')}"
+        self.speak(f"Searching for {query}...")
+        results = web_interaction.get_search_results(query)
+        if not results:
+            self.speak("I couldn't find any results online.")
+            return
+
+        # For simplicity, we'll use the first result
+        top_result_url = results[0]
+        self.speak("Here's a summary of the top result:")
+
+        content = web_interaction.get_page_content(top_result_url)
+        if not content:
+            self.speak("I was unable to retrieve the content from the page.")
+            return
+
+        summary = web_interaction.summarize_text(content)
+        if not summary:
+            self.speak("I'm sorry, I couldn't summarize the content.")
+        else:
+            self.speak(summary)
+
+        # Also open the browser to the search results
         try:
-            webbrowser.open(search_url)
+            webbrowser.open(f"https://www.google.com/search?q={query.replace(' ', '+')}")
         except Exception as e:
-            self.speak(f"Could not open web browser to search online: {e}")
+            self.speak(f"I encountered an error opening the web browser: {e}")
 
     def get_time(self):
         now = datetime.datetime.now()
