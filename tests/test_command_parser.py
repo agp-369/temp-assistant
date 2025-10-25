@@ -43,6 +43,12 @@ def test_parse_teach_command():
     assert command_name == "work mode"
     assert actions == ["open chrome", "open vscode"]
 
+def test_parse_play_on_youtube():
+    """Tests parsing the 'play_on_youtube' intent."""
+    intent, args = parse_command("play epic rock music on youtube")
+    assert intent == "play_on_youtube"
+    assert args == "epic rock music"
+
 def test_parse_invalid_command():
     """Tests that invalid commands are not parsed."""
     intent, args = parse_command("this is not a command")

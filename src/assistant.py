@@ -444,8 +444,14 @@ class Assistant:
             self.speak(str(e), is_error=True)
 
     def play_on_youtube(self, query):
+        """Searches for and plays a video on YouTube."""
+        if not query:
+            self.speak("What would you like me to play on YouTube?")
+            return
+
         self.speak(f"Playing {query} on YouTube.")
+        search_url = f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}"
         try:
             webbrowser.open(search_url)
         except Exception as e:
-            self.speak(f"Could not open web browser to play on YouTube: {e}")
+            self.speak(f"Could not open web browser to play on YouTube: {e}", is_error=True)

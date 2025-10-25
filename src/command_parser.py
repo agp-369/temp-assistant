@@ -59,6 +59,12 @@ set_reminder_patterns = [
 ]
 matcher.add("set_reminder", set_reminder_patterns)
 
+# Pattern for playing on YouTube
+play_youtube_patterns = [
+    [{"LOWER": "play"}, {"IS_ALPHA": True, "OP": "+"}, {"LOWER": "on"}, {"LOWER": "youtube"}]
+]
+matcher.add("play_on_youtube", play_youtube_patterns)
+
 set_alarm_patterns = [
     [{"LOWER": {"IN": ["set", "create", "add"]}}, {"LOWER": "an", "OP": "?"}, {"LOWER": "alarm"}, {"LOWER": "for"}, {"IS_ALPHA": True, "OP": "+"}]
 ]
@@ -124,7 +130,7 @@ def parse_command(text):
     span = doc[start:end]
     keywords_to_remove = [
         "open", "launch", "start", "close", "exit", "terminate", "quit", "search", "for", "find", "look", "google",
-        "what", "who", "is", "are", "define", "set", "a", "an", "reminder", "to", "alarm"
+        "what", "who", "is", "are", "define", "set", "a", "an", "reminder", "to", "alarm", "play", "on", "youtube"
     ]
     entity = " ".join([token.text for token in span if token.lower_ not in keywords_to_remove])
 
