@@ -21,6 +21,7 @@ from . import custom_commands
 from . import usage_tracker
 from . import context_awareness
 from . import web_interaction
+from . import chitchat
 from .command_parser import parse_command
 from .plugin_interface import Plugin
 
@@ -40,7 +41,7 @@ class Assistant:
         self.output_callback = output_callback
         self.apps = app_discovery.load_cached_apps()
         self.custom_commands = custom_commands.load_commands()
-        self.plugins = self.load_plugins()
+        self.plugins, self.plugin_command_map = self.load_plugins()
 
         # Voice Engine Setup
         self.engine = pyttsx3.init()
@@ -51,6 +52,10 @@ class Assistant:
         self.recognizer = sr.Recognizer()
         self.waiting_for_confirmation = False
         self.pending_web_search_query = None
+
+        # Conversational AI history
+        self.conversation_history = None
+
         self.context_thread = threading.Thread(target=self._context_awareness_loop, daemon=True)
         self.context_thread.start()
 
@@ -63,10 +68,15 @@ class Assistant:
             return {}
 
     def load_plugins(self):
-        """Loads plugins from the 'plugins' directory."""
+        """
+        Loads plugins from the 'plugins' directory and builds a command map.
+        Returns a list of all plugins and a dictionary mapping intents to plugins.
+        """
         plugins = []
+        command_map = {}
         if not os.path.exists("plugins"):
-            return plugins
+            return plugins, command_map
+
         for filename in os.listdir("plugins"):
             if filename.endswith(".py") and not filename.startswith("__"):
                 module_name = f"plugins.{filename[:-3]}"
@@ -76,8 +86,13 @@ class Assistant:
                 for attribute_name in dir(module):
                     attribute = getattr(module, attribute_name)
                     if isinstance(attribute, type) and issubclass(attribute, Plugin) and attribute is not Plugin:
-                        plugins.append(attribute())
-        return plugins
+                        plugin_instance = attribute()
+                        plugins.append(plugin_instance)
+                        # Register commands that the plugin handles by intent
+                        if hasattr(plugin_instance, "get_intent_map"):
+                            for intent in plugin_instance.get_intent_map():
+                                command_map[intent] = plugin_instance
+        return plugins, command_map
 
     # --- Voice and Speech ---
     def speak(self, text, is_error=False):
@@ -188,6 +203,12 @@ class Assistant:
 
         command, args = parse_command(command_str)
 
+        # Check for intent-based plugin commands
+        if command in self.plugin_command_map:
+            plugin = self.plugin_command_map[command]
+            plugin.handle((command, args), self)
+            return True
+
         if command == "exit":
             self.speak("Goodbye!")
             return False # Signal to exit
@@ -223,7 +244,9 @@ class Assistant:
         elif command == "answer_question":
             self.answer_question(args)
         else:
-            self.speak(f"Sorry, I don't know the command: {command_str}")
+            # If no other command was matched, try the conversational AI
+            response, self.conversation_history = chitchat.get_chitchat_response(command_str, self.conversation_history)
+            self.speak(response)
         return True
 
     def answer_question(self, query):
