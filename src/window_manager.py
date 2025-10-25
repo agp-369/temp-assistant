@@ -1,9 +1,6 @@
 import sys
 import psutil
 
-if sys.platform == "win32":
-    from pywinauto import Desktop
-
 def bring_window_to_front(app_name):
     """Brings the main window of an application to the foreground."""
     if sys.platform != "win32":
@@ -11,6 +8,7 @@ def bring_window_to_front(app_name):
         return False
 
     try:
+        from pywinauto import Desktop
         windows = Desktop(backend="uia").windows()
         for window in windows:
             if app_name.lower() in window.window_text().lower():
@@ -28,6 +26,7 @@ def close_window(app_name):
         return False
 
     try:
+        from pywinauto import Desktop
         windows = Desktop(backend="uia").windows()
         for window in windows:
             if app_name.lower() in window.window_text().lower():

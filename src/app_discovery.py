@@ -10,7 +10,7 @@ CACHE_FILE = "app_cache.json"
 
 def resolve_shortcut(path):
     """Resolves a .lnk file to its target path."""
-    if not path.lower().endswith(".lnk"):
+    if sys.platform != "win32" or not path.lower().endswith(".lnk"):
         return path
     try:
         shell = Dispatch("WScript.Shell")
@@ -25,6 +25,9 @@ def get_installed_apps():
     Scans the system to find installed applications and returns a dictionary
     mapping app names to their executable paths.
     """
+    if sys.platform != "win32":
+        return {}
+
     apps = {}
 
     def search_registry():
@@ -73,9 +76,8 @@ def get_installed_apps():
                             app_name = os.path.splitext(os.path.basename(file))[0]
                             apps[app_name.lower()] = target_path
 
-    if sys.platform == "win32":
-        search_registry()
-        search_start_menu()
+    search_registry()
+    search_start_menu()
 
     return apps
 
