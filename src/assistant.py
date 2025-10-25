@@ -18,6 +18,7 @@ from . import window_manager
 from . import custom_commands
 from . import usage_tracker
 from .command_parser import parse_command
+from .plugin_interface import Plugin
 
 load_dotenv()
 
@@ -35,6 +36,7 @@ class Assistant:
         self.output_callback = output_callback
         self.apps = app_discovery.load_cached_apps()
         self.custom_commands = custom_commands.load_commands()
+        self.plugins = self.load_plugins()
 
         # Voice Engine Setup
         self.engine = pyttsx3.init()
@@ -53,6 +55,23 @@ class Assistant:
                 return json.load(f)
         except FileNotFoundError:
             return {}
+
+    def load_plugins(self):
+        """Loads plugins from the 'plugins' directory."""
+        plugins = []
+        if not os.path.exists("plugins"):
+            return plugins
+        for filename in os.listdir("plugins"):
+            if filename.endswith(".py") and not filename.startswith("__"):
+                module_name = f"plugins.{filename[:-3]}"
+                spec = importlib.util.spec_from_file_location(module_name, os.path.join("plugins", filename))
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                for attribute_name in dir(module):
+                    attribute = getattr(module, attribute_name)
+                    if isinstance(attribute, type) and issubclass(attribute, Plugin) and attribute is not Plugin:
+                        plugins.append(attribute())
+        return plugins
 
     # --- Voice and Speech ---
     def speak(self, text):
@@ -140,6 +159,12 @@ class Assistant:
             for action in actions:
                 self.process_command(action)
             return True
+
+        # Check for plugin commands
+        for plugin in self.plugins:
+            if plugin.can_handle(command_str):
+                plugin.handle(command_str, self)
+                return True
 
         command, args = parse_command(command_str)
 
