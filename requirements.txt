@@ -17,3 +17,5 @@ transformers
 torch
 wikipedia
 pytest
+plyer
+opencv-python

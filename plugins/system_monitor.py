@@ -1,10 +1,17 @@
 from src.plugin_interface import Plugin
 import psutil
+import time
+from src import notification_manager
 
 class SystemMonitorPlugin(Plugin):
     """
     A plugin to monitor system status like CPU, memory, and battery.
     """
+    def __init__(self):
+        self.last_battery_alert_time = 0
+        # Alert every 10 minutes if the condition persists
+        self.battery_alert_cooldown = 600
+
     def get_intent_map(self):
         return {
             "get_cpu_usage": self.handle,
@@ -32,6 +39,21 @@ class SystemMonitorPlugin(Plugin):
             return f"Battery is at {battery.percent}%, and is {plugged}."
         else:
             return "No battery detected in the system."
+
+    def check_battery_alert(self):
+        """Checks for low battery and sends a notification if needed."""
+        battery = psutil.sensors_battery()
+        if battery:
+            is_low = battery.percent < 20
+            is_unplugged = not battery.power_plugged
+            cooldown_passed = (time.time() - self.last_battery_alert_time) > self.battery_alert_cooldown
+
+            if is_low and is_unplugged and cooldown_passed:
+                notification_manager.send_notification(
+                    "Low Battery Warning",
+                    f"Battery is at {battery.percent}%. Please plug in your device."
+                )
+                self.last_battery_alert_time = time.time()
 
     def handle(self, command, assistant):
         # This handle method will be called directly by the assistant

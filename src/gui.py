@@ -107,6 +107,9 @@ class AssistantGUI(ctk.CTk):
                 self.mem_label.configure(text=self.system_monitor_plugin.get_memory_usage())
                 self.bat_label.configure(text=self.system_monitor_plugin.get_battery_status())
 
+                # Check for and send low battery alert
+                self.system_monitor_plugin.check_battery_alert()
+
                 # Update alarms (simple display)
                 for widget in self.alarms_list_frame.winfo_children():
                     widget.destroy()

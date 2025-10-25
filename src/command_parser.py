@@ -42,8 +42,7 @@ matcher.add("get_time", get_time_patterns)
 
 # Pattern for answering questions
 answer_question_patterns = [
-    [{"LOWER": {"IN": ["what", "who"]}}, {"LOWER": {"IN": ["is", "are"]}}, {"IS_ALPHA": True, "OP": "+"}],
-    [{"LOWER": "define"}, {"IS_ALPHA": True, "OP": "+"}]
+    [{"LOWER": {"IN": ["what", "who"]}}, {"LOWER": {"IN": ["is", "are"]}}, {"IS_ALPHA": True, "OP": "+"}]
 ]
 matcher.add("answer_question", answer_question_patterns)
 
@@ -59,10 +58,27 @@ set_reminder_patterns = [
 ]
 matcher.add("set_reminder", set_reminder_patterns)
 
+# Pattern for playing on YouTube
+play_youtube_patterns = [
+    [{"LOWER": "play"}, {"IS_ALPHA": True, "OP": "+"}, {"LOWER": "on"}, {"LOWER": "youtube"}]
+]
+matcher.add("play_on_youtube", play_youtube_patterns)
+
 set_alarm_patterns = [
     [{"LOWER": {"IN": ["set", "create", "add"]}}, {"LOWER": "an", "OP": "?"}, {"LOWER": "alarm"}, {"LOWER": "for"}, {"IS_ALPHA": True, "OP": "+"}]
 ]
 matcher.add("set_alarm", set_alarm_patterns)
+
+# Patterns for file management
+find_files_patterns = [
+    [{"LOWER": "find"}, {"LOWER": "my", "OP": "?"}, {"IS_ALPHA": True, "OP": "+"}, {"LOWER": "files"}]
+]
+matcher.add("find_files", find_files_patterns)
+
+move_files_patterns = [
+    [{"LOWER": "move"}, {"LOWER": "all", "OP": "?"}, {"IS_ALPHA": True, "OP": "+"}, {"LOWER": "from"}, {"IS_ALPHA": True, "OP": "+"}, {"LOWER": "to"}, {"IS_ALPHA": True, "OP": "+"}]
+]
+matcher.add("move_files", move_files_patterns)
 
 get_memory_patterns = [
     [{"LOWER": {"IN": ["what", "check"]}}, {"LOWER": "is"}, {"LOWER": "the"}, {"LOWER": "memory"}, {"LOWER": "usage"}]
@@ -122,10 +138,18 @@ def parse_command(text):
 
     # Extract the entity (the part of the text that isn't the keyword)
     span = doc[start:end]
-    keywords_to_remove = [
-        "open", "launch", "start", "close", "exit", "terminate", "quit", "search", "for", "find", "look", "google",
-        "what", "who", "is", "are", "define", "set", "a", "an", "reminder", "to", "alarm"
-    ]
+    keywords_to_remove = {
+        "open_app": ["open", "launch", "start"],
+        "close_app": ["close", "exit", "terminate", "quit"],
+        "search": ["search", "for", "find", "look", "google"],
+        "answer_question": ["what", "who", "is", "are"],
+        "set_reminder": ["set", "a", "reminder", "to"],
+        "set_alarm": ["set", "an", "alarm", "for"],
+        "play_on_youtube": ["play", "on", "youtube"],
+        "find_files": ["find", "my", "files"],
+        "move_files": ["move", "all", "from", "to"]
+    }.get(intent, [])
+
     entity = " ".join([token.text for token in span if token.lower_ not in keywords_to_remove])
 
     return intent, entity.strip()

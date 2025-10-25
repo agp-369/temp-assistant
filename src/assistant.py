@@ -14,6 +14,7 @@ import json
 import importlib.util
 import threading
 import time
+import shutil
 from dotenv import load_dotenv
 from . import app_discovery
 from . import window_manager
@@ -22,6 +23,7 @@ from . import usage_tracker
 from . import context_awareness
 from . import web_interaction
 from . import chitchat
+from . import vision_system
 from .command_parser import parse_command
 from .plugin_interface import Plugin
 
@@ -52,9 +54,16 @@ class Assistant:
         self.recognizer = sr.Recognizer()
         self.waiting_for_confirmation = False
         self.pending_web_search_query = None
+        self.pending_file_move = None
 
         # Conversational AI history
         self.conversation_history = None
+
+        # Vision System
+        self.vision = vision_system.VisionSystem()
+        self.vision.start()
+        self.auto_lock_thread = threading.Thread(target=self._auto_lock_loop, daemon=True)
+        self.auto_lock_thread.start()
 
         self.context_thread = threading.Thread(target=self._context_awareness_loop, daemon=True)
         self.context_thread.start()
@@ -178,9 +187,12 @@ class Assistant:
                 elif self.pending_web_search_query:
                     self.perform_web_search(self.pending_web_search_query)
                     self.pending_web_search_query = None
+                elif self.pending_file_move:
+                    self.execute_file_move()
             elif "no" in command_str:
                 self.waiting_for_confirmation = False
                 self.pending_web_search_query = None
+                self.pending_file_move = None
                 if hasattr(self, 'pending_summarization_url'):
                     del self.pending_summarization_url
                 self.speak("Okay, I won't do that.")
@@ -443,9 +455,65 @@ class Assistant:
         except Exception as e:
             self.speak(str(e), is_error=True)
 
+    def execute_file_move(self):
+        """Executes the pending file move operation after confirmation."""
+        if not self.pending_file_move:
+            return
+
+        files = self.pending_file_move["files"]
+        dest = self.pending_file_move["dest"]
+        moved_count = 0
+
+        try:
+            for f in files:
+                shutil.move(f, dest)
+                moved_count += 1
+            self.speak(f"Successfully moved {moved_count} files.")
+        except Exception as e:
+            self.speak(f"An error occurred while moving files: {e}", is_error=True)
+        finally:
+            self.pending_file_move = None
+
+    def lock_screen(self):
+        """Locks the user's screen."""
+        self.speak("User is absent. Locking screen.")
+        try:
+            if sys.platform == "win32":
+                import ctypes
+                ctypes.windll.user32.LockWorkStation()
+            elif sys.platform == "darwin": # macOS
+                subprocess.run(["/System/Library/CoreServices/Menu Extras/User.menu/Contents/Resources/CGSession", "-suspend"])
+            else: # Linux
+                subprocess.run(["xdg-screensaver", "lock"])
+        except Exception as e:
+            self.speak(f"Failed to lock screen: {e}", is_error=True)
+
+    def _auto_lock_loop(self):
+        """Periodically checks for user absence and locks the screen."""
+        lock_delay = self.config.get("auto_lock_delay_seconds", 30)
+        last_present_time = time.time()
+        is_locked = False
+
+        while True:
+            if self.vision.user_present:
+                last_present_time = time.time()
+                is_locked = False
+            else:
+                if not is_locked and (time.time() - last_present_time) > lock_delay:
+                    self.lock_screen()
+                    is_locked = True
+
+            time.sleep(5) # Check every 5 seconds
+
     def play_on_youtube(self, query):
+        """Searches for and plays a video on YouTube."""
+        if not query:
+            self.speak("What would you like me to play on YouTube?")
+            return
+
         self.speak(f"Playing {query} on YouTube.")
+        search_url = f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}"
         try:
             webbrowser.open(search_url)
         except Exception as e:
-            self.speak(f"Could not open web browser to play on YouTube: {e}")
+            self.speak(f"Could not open web browser to play on YouTube: {e}", is_error=True)
