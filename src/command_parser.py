@@ -40,6 +40,13 @@ get_time_patterns = [
 ]
 matcher.add("get_time", get_time_patterns)
 
+# Pattern for answering questions
+answer_question_patterns = [
+    [{"LOWER": {"IN": ["what", "who"]}}, {"LOWER": {"IN": ["is", "are"]}}, {"IS_ALPHA": True, "OP": "+"}],
+    [{"LOWER": "define"}, {"IS_ALPHA": True, "OP": "+"}]
+]
+matcher.add("answer_question", answer_question_patterns)
+
 # Pattern for teaching a new command
 teach_command_patterns = [
     [{"LOWER": "teach"}, {"LOWER": "command"}, {"IS_ALPHA": True, "OP": "+"}, {"LOWER": "to"}, {"IS_ALPHA": True, "OP": "+"}]
@@ -88,6 +95,7 @@ def parse_command(text):
 
     # Extract the entity (the part of the text that isn't the keyword)
     span = doc[start:end]
-    entity = " ".join([token.text for token in span if token.lower_ not in ["open", "launch", "start", "close", "exit", "terminate", "quit", "search", "for", "find", "look", "google"]])
+    keywords_to_remove = ["open", "launch", "start", "close", "exit", "terminate", "quit", "search", "for", "find", "look", "google", "what", "who", "is", "are", "define"]
+    entity = " ".join([token.text for token in span if token.lower_ not in keywords_to_remove])
 
     return intent, entity.strip()

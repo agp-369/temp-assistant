@@ -12,10 +12,14 @@ import struct
 import pyautogui
 import json
 import importlib.util
+import threading
+import time
 from dotenv import load_dotenv
 from . import app_discovery
 from . import window_manager
 from . import custom_commands
+from . import usage_tracker
+from . import context_awareness
 from . import web_interaction
 from .command_parser import parse_command
 from .plugin_interface import Plugin
@@ -47,6 +51,8 @@ class Assistant:
         self.recognizer = sr.Recognizer()
         self.waiting_for_confirmation = False
         self.pending_web_search_query = None
+        self.context_thread = threading.Thread(target=self._context_awareness_loop, daemon=True)
+        self.context_thread.start()
 
     # --- Configuration ---
     def load_config(self):
@@ -142,13 +148,18 @@ class Assistant:
         if self.waiting_for_confirmation:
             if "yes" in command_str:
                 self.waiting_for_confirmation = False
-                if self.pending_web_search_query:
+                if hasattr(self, 'pending_summarization_url'):
+                    self.summarize_page(self.pending_summarization_url)
+                    del self.pending_summarization_url
+                elif self.pending_web_search_query:
                     self.perform_web_search(self.pending_web_search_query)
                     self.pending_web_search_query = None
             elif "no" in command_str:
                 self.waiting_for_confirmation = False
                 self.pending_web_search_query = None
-                self.speak("Okay, I won't search online.")
+                if hasattr(self, 'pending_summarization_url'):
+                    del self.pending_summarization_url
+                self.speak("Okay, I won't do that.")
             else:
                 self.speak("Please answer with yes or no.")
             return True
@@ -200,9 +211,21 @@ class Assistant:
         elif command == "teach_command":
             command_name, actions = args
             self.teach_command(command_name, actions)
+        elif command == "answer_question":
+            self.answer_question(args)
         else:
             self.speak(f"Sorry, I don't know the command: {command_str}")
         return True
+
+    def answer_question(self, query):
+        """Answers a direct question using the web_interaction module."""
+        self.speak(f"Looking up {query}...")
+        answer = web_interaction.get_instant_answer(query)
+        if answer:
+            self.speak(answer)
+        else:
+            self.speak(f"I couldn't find a direct answer for '{query}'. I'll perform a web search for you.")
+            self.perform_web_search(query)
 
     # --- Core Commands ---
     def teach_command(self, name, actions):
@@ -213,18 +236,10 @@ class Assistant:
         else:
             self.speak("I'm sorry, I couldn't save that command.")
 
-    def perform_web_search(self, query):
-        self.speak(f"Searching for {query}...")
-        results = web_interaction.get_search_results(query)
-        if not results:
-            self.speak("I couldn't find any results online.")
-            return
-
-        # For simplicity, we'll use the first result
-        top_result_url = results[0]
-        self.speak("Here's a summary of the top result:")
-
-        content = web_interaction.get_page_content(top_result_url)
+    def summarize_page(self, url):
+        """Summarizes the content of a web page."""
+        self.speak("Okay, summarizing the page.")
+        content = web_interaction.get_page_content(url)
         if not content:
             self.speak("I was unable to retrieve the content from the page.")
             return
@@ -235,11 +250,13 @@ class Assistant:
         else:
             self.speak(summary)
 
-        # Also open the browser to the search results
+    def perform_web_search(self, query):
+        self.speak(f"Searching online for {query}.")
+        search_url = f"https://www.google.com/search?q={query.replace(' ', '+')}"
         try:
-            webbrowser.open(f"https://www.google.com/search?q={query.replace(' ', '+')}")
+            webbrowser.open(search_url)
         except Exception as e:
-            self.speak(f"I encountered an error opening the web browser: {e}")
+            self.speak(f"Could not open web browser to search online: {e}")
 
     def get_time(self):
         now = datetime.datetime.now()
@@ -271,27 +288,59 @@ class Assistant:
         except Exception as e:
             self.speak(f"An error occurred while typing: {e}")
 
+    def _context_awareness_loop(self):
+        """Periodically checks the user's context and offers help."""
+        while True:
+            time.sleep(5)
+            if self.waiting_for_confirmation:
+                continue
+
+            info = context_awareness.get_active_window_info()
+            if info:
+                process_name = info.get("process_name", "").lower()
+                if process_name in ["chrome.exe", "firefox.exe", "msedge.exe"]:
+                    url = context_awareness.get_browser_url(process_name)
+                    if url:
+                        self.speak("I see you're on a web page. Would you like me to summarize it for you?")
+                        self.waiting_for_confirmation = True
+                        self.pending_summarization_url = url
+
+    def _find_best_match(self, query, items, usage_stats):
+        """Finds the best match for a query from a list of items based on usage."""
+        # Simple implementation: prioritize exact match, then most used
+        query_lower = query.lower()
+        if query_lower in items:
+            return items[query_lower]
+
+        # Find all partial matches
+        matches = {name: path for name, path in items.items() if query_lower in name}
+        if not matches:
+            return None
+
+        # Prioritize by usage
+        if usage_stats:
+            best_match_name = max(matches.keys(), key=lambda name: usage_stats.get(name, 0))
+            return matches[best_match_name]
+
+        # If no usage stats, return the first match
+        return list(matches.values())[0]
+
     # --- File System and Applications ---
     def find_executable(self, app_name):
-        app_name_lower = app_name.lower()
-        # Search in the cached app list
-        if app_name_lower in self.apps:
-            return self.apps[app_name_lower]
-
-        # Fallback to searching the system PATH
-        for path in os.environ["PATH"].split(os.pathsep):
-            exe_file = os.path.join(path, app_name)
-            if os.path.isfile(exe_file) and os.access(exe_file, os.X_OK):
-                return exe_file
-
-        return None
+        stats = usage_tracker.load_stats()
+        return self._find_best_match(app_name, self.apps, stats.get("apps"))
 
     def find_file(self, filename):
+        # This is a simplified version; a real implementation would search the file system
+        # and then use the usage stats to prioritize. For now, we'll just use a placeholder.
         home_dir = os.path.expanduser("~")
+        all_files = {}
         for root, _, files in os.walk(home_dir):
-            if filename in files:
-                return os.path.join(root, filename)
-        return None
+            for file in files:
+                all_files[file.lower()] = os.path.join(root, file)
+
+        stats = usage_tracker.load_stats()
+        return self._find_best_match(filename, all_files, stats.get("files"))
 
     def open_uwp_app(self, app_name):
         try:
@@ -305,6 +354,7 @@ class Assistant:
         # 1. Try to bring the window to the front if it's already open
         if window_manager.bring_window_to_front(app_name):
             self.speak(f"Application '{app_name}' is already running. Bringing to front.")
+            usage_tracker.track_app_usage(app_name)
             return
 
         # 2. If not open, find the executable
@@ -313,6 +363,7 @@ class Assistant:
             try:
                 subprocess.Popen([executable_path])
                 self.speak(f"Opening {app_name}...")
+                usage_tracker.track_app_usage(app_name)
             except Exception as e:
                 self.speak(f"An unexpected error occurred while opening {app_name}: {e}")
             return
@@ -351,6 +402,7 @@ class Assistant:
             else:
                 subprocess.Popen(["xdg-open", filepath])
             self.speak(f"Opening {filename}...")
+            usage_tracker.track_file_usage(filename)
         except Exception as e:
             self.speak(f"An error occurred: {e}")
 

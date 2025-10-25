@@ -12,10 +12,10 @@ class WeatherPlugin(Plugin):
         location = command.split("weather in")[-1].strip()
         api_key = assistant.config.get("weather_api_key")
         if not api_key:
-            assistant.speak("I'm sorry, I don't have a weather API key configured.")
+            assistant.speak("I'm sorry, I don't have a weather API key configured. Please add one to your config.json file.")
             return
 
-        url = f"http://api.openweathermap.org/data/2.5/weather?q={location}&appid={api_key}&units=metric"
+        url = f"https://api.openweathermap.org/data/2.5/weather?q={location}&appid={api_key}&units=metric"
         try:
             response = requests.get(url)
             data = response.json()
