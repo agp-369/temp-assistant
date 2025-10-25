@@ -55,6 +55,7 @@ class Assistant:
         self.waiting_for_confirmation = False
         self.pending_web_search_query = None
         self.pending_file_move = None
+        self.pending_text_summarization = None
 
         # Conversational AI history
         self.conversation_history = None
@@ -195,10 +196,16 @@ class Assistant:
                     self.pending_web_search_query = None
                 elif self.pending_file_move:
                     self.execute_file_move()
+                elif self.pending_text_summarization:
+                    self.speak("Okay, summarizing the text.")
+                    summary = web_interaction.summarize_text(self.pending_text_summarization)
+                    self.speak(summary)
+                    self.pending_text_summarization = None
             elif "no" in command_str:
                 self.waiting_for_confirmation = False
                 self.pending_web_search_query = None
                 self.pending_file_move = None
+                self.pending_text_summarization = None
                 if hasattr(self, 'pending_summarization_url'):
                     del self.pending_summarization_url
                 self.speak("Okay, I won't do that.")
@@ -265,6 +272,18 @@ class Assistant:
             self.speak("Learning your face... Please look at the camera.")
             response = self.vision.learn_current_user_face(args)
             self.speak(response)
+        elif command == "read_text":
+            self.speak("Okay, please hold the text up to the camera.")
+            extracted_text = self.vision.capture_and_read_text()
+            if "I couldn't" in extracted_text or "Error" in extracted_text:
+                self.speak(extracted_text)
+            else:
+                self.speak("I found the following text:")
+                # Speak a short snippet
+                self.speak(extracted_text[:150] + "...")
+                self.speak("Would you like me to summarize this text?")
+                self.waiting_for_confirmation = True
+                self.pending_text_summarization = extracted_text
         else:
             # If no other command was matched, try the conversational AI
             response, self.conversation_history = chitchat.get_chitchat_response(command_str, self.conversation_history)

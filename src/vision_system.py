@@ -4,6 +4,7 @@ import time
 import face_recognition
 import mediapipe as mp
 from deepface import DeepFace
+import pytesseract
 from . import face_manager
 
 class VisionSystem:
@@ -139,6 +140,28 @@ class VisionSystem:
                     if (thumb_tip.x > thumb_ip.x and index_tip.y < index_pip.y):
                         self.detected_gesture = "open_palm"; break
                 except Exception: pass
+
+    def capture_and_read_text(self):
+        """Captures a single frame and performs OCR to extract text."""
+        if not self.camera or not self.camera.isOpened():
+            return "Camera is not available."
+
+        success, frame = self.camera.read()
+        if not success:
+            return "Failed to capture an image from the camera."
+
+        # Preprocess the image for better OCR results
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        # Apply a binary threshold to get a black and white image
+        _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+
+        try:
+            text = pytesseract.image_to_string(thresh)
+            return text if text.strip() else "I couldn't find any text in the image."
+        except pytesseract.TesseractNotFoundError:
+            return "Tesseract OCR engine is not installed. Please run the setup script."
+        except Exception as e:
+            return f"An error occurred during text recognition: {e}"
 
     def _process_emotions(self, frame):
         """Analyzes a frame for facial emotion."""
