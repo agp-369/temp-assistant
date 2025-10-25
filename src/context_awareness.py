@@ -1,7 +1,5 @@
 import sys
 import time
-from pywinauto import Desktop
-import psutil
 
 def get_active_window_info():
     """
@@ -12,6 +10,9 @@ def get_active_window_info():
         return None
 
     try:
+        from pywinauto import Desktop
+        import psutil
+
         windows = Desktop(backend="uia").windows()
         for w in windows:
             if w.is_active():
@@ -34,6 +35,8 @@ def get_browser_url(process_name):
         return None
 
     try:
+        from pywinauto import Desktop
+
         app = Desktop(backend="uia").child_window(process_name=process_name, top_level_only=True)
         url = app.child_window(control_type="Edit", top_level_only=False).get_value()
         return url
