@@ -12,3 +12,7 @@ pywin32; sys_platform == 'win32'
 pywinauto
 spacy
 requests
+requests
+beautifulsoup4
+transformers
+torch

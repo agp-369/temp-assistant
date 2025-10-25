@@ -12,11 +12,15 @@ import struct
 import pyautogui
 import json
 import importlib.util
+import threading
+import time
 from dotenv import load_dotenv
 from . import app_discovery
 from . import window_manager
 from . import custom_commands
 from . import usage_tracker
+from . import context_awareness
+from . import web_interaction
 from .command_parser import parse_command
 from .plugin_interface import Plugin
 
@@ -47,6 +51,8 @@ class Assistant:
         self.recognizer = sr.Recognizer()
         self.waiting_for_confirmation = False
         self.pending_web_search_query = None
+        self.context_thread = threading.Thread(target=self._context_awareness_loop, daemon=True)
+        self.context_thread.start()
 
     # --- Configuration ---
     def load_config(self):
@@ -142,13 +148,18 @@ class Assistant:
         if self.waiting_for_confirmation:
             if "yes" in command_str:
                 self.waiting_for_confirmation = False
-                if self.pending_web_search_query:
+                if hasattr(self, 'pending_summarization_url'):
+                    self.summarize_page(self.pending_summarization_url)
+                    del self.pending_summarization_url
+                elif self.pending_web_search_query:
                     self.perform_web_search(self.pending_web_search_query)
                     self.pending_web_search_query = None
             elif "no" in command_str:
                 self.waiting_for_confirmation = False
                 self.pending_web_search_query = None
-                self.speak("Okay, I won't search online.")
+                if hasattr(self, 'pending_summarization_url'):
+                    del self.pending_summarization_url
+                self.speak("Okay, I won't do that.")
             else:
                 self.speak("Please answer with yes or no.")
             return True
@@ -213,6 +224,20 @@ class Assistant:
         else:
             self.speak("I'm sorry, I couldn't save that command.")
 
+    def summarize_page(self, url):
+        """Summarizes the content of a web page."""
+        self.speak("Okay, summarizing the page.")
+        content = web_interaction.get_page_content(url)
+        if not content:
+            self.speak("I was unable to retrieve the content from the page.")
+            return
+
+        summary = web_interaction.summarize_text(content)
+        if not summary:
+            self.speak("I'm sorry, I couldn't summarize the content.")
+        else:
+            self.speak(summary)
+
     def perform_web_search(self, query):
         self.speak(f"Searching online for {query}.")
         search_url = f"https://www.google.com/search?q={query.replace(' ', '+')}"
@@ -250,6 +275,23 @@ class Assistant:
             pyautogui.write(text, interval=0.05)
         except Exception as e:
             self.speak(f"An error occurred while typing: {e}")
+
+    def _context_awareness_loop(self):
+        """Periodically checks the user's context and offers help."""
+        while True:
+            time.sleep(5)
+            if self.waiting_for_confirmation:
+                continue
+
+            info = context_awareness.get_active_window_info()
+            if info:
+                process_name = info.get("process_name", "").lower()
+                if process_name in ["chrome.exe", "firefox.exe", "msedge.exe"]:
+                    url = context_awareness.get_browser_url(process_name)
+                    if url:
+                        self.speak("I see you're on a web page. Would you like me to summarize it for you?")
+                        self.waiting_for_confirmation = True
+                        self.pending_summarization_url = url
 
     def _find_best_match(self, query, items, usage_stats):
         """Finds the best match for a query from a list of items based on usage."""
