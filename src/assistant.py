@@ -23,6 +23,7 @@ from . import usage_tracker
 from . import context_awareness
 from . import web_interaction
 from . import chitchat
+from . import vision_system
 from .command_parser import parse_command
 from .plugin_interface import Plugin
 
@@ -57,6 +58,12 @@ class Assistant:
 
         # Conversational AI history
         self.conversation_history = None
+
+        # Vision System
+        self.vision = vision_system.VisionSystem()
+        self.vision.start()
+        self.auto_lock_thread = threading.Thread(target=self._auto_lock_loop, daemon=True)
+        self.auto_lock_thread.start()
 
         self.context_thread = threading.Thread(target=self._context_awareness_loop, daemon=True)
         self.context_thread.start()
@@ -466,6 +473,37 @@ class Assistant:
             self.speak(f"An error occurred while moving files: {e}", is_error=True)
         finally:
             self.pending_file_move = None
+
+    def lock_screen(self):
+        """Locks the user's screen."""
+        self.speak("User is absent. Locking screen.")
+        try:
+            if sys.platform == "win32":
+                import ctypes
+                ctypes.windll.user32.LockWorkStation()
+            elif sys.platform == "darwin": # macOS
+                subprocess.run(["/System/Library/CoreServices/Menu Extras/User.menu/Contents/Resources/CGSession", "-suspend"])
+            else: # Linux
+                subprocess.run(["xdg-screensaver", "lock"])
+        except Exception as e:
+            self.speak(f"Failed to lock screen: {e}", is_error=True)
+
+    def _auto_lock_loop(self):
+        """Periodically checks for user absence and locks the screen."""
+        lock_delay = self.config.get("auto_lock_delay_seconds", 30)
+        last_present_time = time.time()
+        is_locked = False
+
+        while True:
+            if self.vision.user_present:
+                last_present_time = time.time()
+                is_locked = False
+            else:
+                if not is_locked and (time.time() - last_present_time) > lock_delay:
+                    self.lock_screen()
+                    is_locked = True
+
+            time.sleep(5) # Check every 5 seconds
 
     def play_on_youtube(self, query):
         """Searches for and plays a video on YouTube."""
