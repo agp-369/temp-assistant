@@ -14,3 +14,4 @@ spacy
 beautifulsoup4
 transformers
 torch
+requests
