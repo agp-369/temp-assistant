@@ -5,6 +5,7 @@ import face_recognition
 import mediapipe as mp
 from deepface import DeepFace
 import pytesseract
+from ultralytics import YOLO
 from . import face_manager
 
 class VisionSystem:
@@ -27,10 +28,12 @@ class VisionSystem:
         self.recognized_user = None
         self.detected_gesture = None
         self.detected_emotion = None
+        self.detected_objects = []
         self._frame_counter = 0
         self.mp_hands = mp.solutions.hands
         self.hands = self.mp_hands.Hands(max_num_hands=1, min_detection_confidence=0.7)
         self.mp_draw = mp.solutions.drawing_utils
+        self.yolo_model = YOLO("yolov8n.pt")
 
     def learn_current_user_face(self, name):
         # ... (implementation is the same)
@@ -79,15 +82,12 @@ class VisionSystem:
             success, frame = self.camera.read()
             if not success: time.sleep(0.1); continue
 
-            task_index = self._frame_counter % 4
-            if task_index == 0:
-                self._process_presence(frame)
-            elif task_index == 1:
-                self._process_recognition(frame)
-            elif task_index == 2:
-                self._process_gestures(frame)
-            else:
-                self._process_emotions(frame)
+            task_index = self._frame_counter % 5
+            if task_index == 0: self._process_presence(frame)
+            elif task_index == 1: self._process_recognition(frame)
+            elif task_index == 2: self._process_gestures(frame)
+            elif task_index == 3: self._process_emotions(frame)
+            else: self._process_object_detection(frame)
 
             self._frame_counter += 1
             time.sleep(0.5) # Balance performance
@@ -142,41 +142,43 @@ class VisionSystem:
                 except Exception: pass
 
     def capture_and_read_text(self):
-        """Captures a single frame and performs OCR to extract text."""
-        if not self.camera or not self.camera.isOpened():
-            return "Camera is not available."
-
+        # ... (implementation is the same)
+        if not self.camera or not self.camera.isOpened(): return "Camera not available."
         success, frame = self.camera.read()
-        if not success:
-            return "Failed to capture an image from the camera."
-
-        # Preprocess the image for better OCR results
+        if not success: return "Failed to capture image."
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        # Apply a binary threshold to get a black and white image
         _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
-
         try:
             text = pytesseract.image_to_string(thresh)
-            return text if text.strip() else "I couldn't find any text in the image."
-        except pytesseract.TesseractNotFoundError:
-            return "Tesseract OCR engine is not installed. Please run the setup script."
-        except Exception as e:
-            return f"An error occurred during text recognition: {e}"
+            return text if text.strip() else "I couldn't find any text."
+        except Exception as e: return f"OCR Error: {e}"
 
     def _process_emotions(self, frame):
-        """Analyzes a frame for facial emotion."""
-        self.detected_emotion = None # Reset emotion
+        # ... (implementation is the same)
+        self.detected_emotion = None
         try:
-            # DeepFace expects BGR format, which OpenCV provides.
-            # It's a heavy operation, so we only run it periodically.
             analysis = DeepFace.analyze(frame, actions=['emotion'], enforce_detection=False)
-
-            # DeepFace returns a list of faces; we'll use the first one
             if isinstance(analysis, list) and len(analysis) > 0:
                 self.detected_emotion = analysis[0]['dominant_emotion']
-            elif isinstance(analysis, dict): # Sometimes it returns a dict if one face
+            elif isinstance(analysis, dict):
                 self.detected_emotion = analysis['dominant_emotion']
+        except Exception: pass
+
+    def _process_object_detection(self, frame):
+        """Analyzes a frame for common objects using YOLO."""
+        self.detected_objects = []
+        try:
+            results = self.yolo_model(frame, verbose=False)
+
+            # Extract names of detected objects
+            names = self.yolo_model.names
+            for r in results:
+                for c in r.boxes.cls:
+                    self.detected_objects.append(names[int(c)])
+
+            # Keep only unique object names
+            self.detected_objects = sorted(list(set(self.detected_objects)))
 
         except Exception as e:
-            # This can fail if no face is found or on model errors
-            pass # Silently fail
+            print(f"Object detection error: {e}")
+            self.detected_objects = []

@@ -92,6 +92,13 @@ read_text_patterns = [
 ]
 matcher.add("read_text", read_text_patterns)
 
+# Pattern for identifying objects
+identify_objects_patterns = [
+    [{"LOWER": {"IN": ["what", "identify"]}}, {"LOWER": "do"}, {"LOWER": "you"}, {"LOWER": "see"}],
+    [{"LOWER": "identify"}, {"LOWER": "objects"}]
+]
+matcher.add("identify_objects", identify_objects_patterns)
+
 get_memory_patterns = [
     [{"LOWER": {"IN": ["what", "check"]}}, {"LOWER": "is"}, {"LOWER": "the"}, {"LOWER": "memory"}, {"LOWER": "usage"}]
 ]

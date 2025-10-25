@@ -284,6 +284,12 @@ class Assistant:
                 self.speak("Would you like me to summarize this text?")
                 self.waiting_for_confirmation = True
                 self.pending_text_summarization = extracted_text
+        elif command == "identify_objects":
+            objects = self.vision.detected_objects
+            if not objects:
+                self.speak("I don't see any recognizable objects right now.")
+            else:
+                self.speak(f"I can see a {', a '.join(objects)}.")
         else:
             # If no other command was matched, try the conversational AI
             response, self.conversation_history = chitchat.get_chitchat_response(command_str, self.conversation_history)
