@@ -21,6 +21,7 @@ from . import custom_commands
 from . import usage_tracker
 from . import context_awareness
 from . import web_interaction
+from . import chitchat
 from .command_parser import parse_command
 from .plugin_interface import Plugin
 
@@ -40,7 +41,7 @@ class Assistant:
         self.output_callback = output_callback
         self.apps = app_discovery.load_cached_apps()
         self.custom_commands = custom_commands.load_commands()
-        self.plugins = self.load_plugins()
+        self.plugins, self.plugin_command_map = self.load_plugins()
 
         # Voice Engine Setup
         self.engine = pyttsx3.init()
@@ -51,6 +52,10 @@ class Assistant:
         self.recognizer = sr.Recognizer()
         self.waiting_for_confirmation = False
         self.pending_web_search_query = None
+
+        # Conversational AI history
+        self.conversation_history = None
+
         self.context_thread = threading.Thread(target=self._context_awareness_loop, daemon=True)
         self.context_thread.start()
 
@@ -63,10 +68,15 @@ class Assistant:
             return {}
 
     def load_plugins(self):
-        """Loads plugins from the 'plugins' directory."""
+        """
+        Loads plugins from the 'plugins' directory and builds a command map.
+        Returns a list of all plugins and a dictionary mapping intents to plugins.
+        """
         plugins = []
+        command_map = {}
         if not os.path.exists("plugins"):
-            return plugins
+            return plugins, command_map
+
         for filename in os.listdir("plugins"):
             if filename.endswith(".py") and not filename.startswith("__"):
                 module_name = f"plugins.{filename[:-3]}"
@@ -76,17 +86,31 @@ class Assistant:
                 for attribute_name in dir(module):
                     attribute = getattr(module, attribute_name)
                     if isinstance(attribute, type) and issubclass(attribute, Plugin) and attribute is not Plugin:
-                        plugins.append(attribute())
-        return plugins
+                        plugin_instance = attribute()
+                        plugins.append(plugin_instance)
+                        # Register commands that the plugin handles by intent
+                        if hasattr(plugin_instance, "get_intent_map"):
+                            for intent in plugin_instance.get_intent_map():
+                                command_map[intent] = plugin_instance
+        return plugins, command_map
 
     # --- Voice and Speech ---
-    def speak(self, text):
+    def speak(self, text, is_error=False):
+        """Outputs text to the GUI or console, handling errors."""
+        if is_error:
+            text = f"Error: {text}"
+
         if self.output_callback:
             self.output_callback(text)
         else:
             print(f"{self.assistant_name}: {text}")
+
+        # Voice output can be unreliable in some environments, so we wrap it
+        try:
             self.engine.say(text)
             self.engine.runAndWait()
+        except Exception as e:
+            print(f"TTS Error: {e}")
 
     def listen_for_wake_word(self):
         if not PICOVOICE_ACCESS_KEY:
@@ -118,7 +142,7 @@ class Assistant:
                         if not self.process_command(command):
                             break # Exit loop if process_command signals to
         except Exception as e:
-            self.speak(f"An error occurred with the wake word listener: {e}")
+            self.speak(f"An error occurred with the wake word listener: {e}", is_error=True)
         finally:
             if audio_stream is not None:
                 audio_stream.close()
@@ -179,6 +203,12 @@ class Assistant:
 
         command, args = parse_command(command_str)
 
+        # Check for intent-based plugin commands
+        if command in self.plugin_command_map:
+            plugin = self.plugin_command_map[command]
+            plugin.handle((command, args), self)
+            return True
+
         if command == "exit":
             self.speak("Goodbye!")
             return False # Signal to exit
@@ -214,7 +244,9 @@ class Assistant:
         elif command == "answer_question":
             self.answer_question(args)
         else:
-            self.speak(f"Sorry, I don't know the command: {command_str}")
+            # If no other command was matched, try the conversational AI
+            response, self.conversation_history = chitchat.get_chitchat_response(command_str, self.conversation_history)
+            self.speak(response)
         return True
 
     def answer_question(self, query):
@@ -368,19 +400,24 @@ class Assistant:
                 self.speak(f"An unexpected error occurred while opening {app_name}: {e}")
             return
 
-        # 3. If executable not found, try other methods (ShellExecute, UWP)
-        if sys.platform == "win32":
-            try:
+        # 3. If executable not found, try other platform-specific methods
+        try:
+            if sys.platform == "win32":
                 win32api.ShellExecute(0, "open", app_name, "", "", 1)
                 self.speak(f"Opening {app_name} using Windows ShellExecute...")
                 return
-            except Exception:
-                # If ShellExecute fails, try to open as a UWP app
-                self.open_uwp_app(app_name)
+            elif sys.platform == "darwin": # macOS
+                subprocess.Popen(["open", "-a", app_name])
+                self.speak(f"Opening {app_name}...")
                 return
-
-        # 4. If all else fails, ask about web search
-        self.speak(f"Application '{app_name}' not found. Would you like to search online?")
+            else: # Linux and other OS
+                # This is a simple approach; a more robust solution would search PATH
+                subprocess.Popen([app_name])
+                self.speak(f"Opening {app_name}...")
+                return
+        except Exception:
+             # 4. If all else fails, ask about web search
+            self.speak(f"Application '{app_name}' not found. Would you like to search online?")
         return "WAITING_FOR_WEB_SEARCH_CONFIRMATION"
 
     def close_application(self, app_name):
@@ -404,7 +441,7 @@ class Assistant:
             self.speak(f"Opening {filename}...")
             usage_tracker.track_file_usage(filename)
         except Exception as e:
-            self.speak(f"An error occurred: {e}")
+            self.speak(str(e), is_error=True)
 
     def play_on_youtube(self, query):
         self.speak(f"Playing {query} on YouTube.")

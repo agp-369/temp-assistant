@@ -16,3 +16,4 @@ beautifulsoup4
 transformers
 torch
 wikipedia
+pytest

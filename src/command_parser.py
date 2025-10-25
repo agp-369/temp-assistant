@@ -47,6 +47,33 @@ answer_question_patterns = [
 ]
 matcher.add("answer_question", answer_question_patterns)
 
+# Patterns for system monitoring
+get_cpu_patterns = [
+    [{"LOWER": {"IN": ["what", "check"]}}, {"LOWER": "is"}, {"LOWER": "the"}, {"LOWER": "cpu"}, {"LOWER": "usage"}]
+]
+matcher.add("get_cpu_usage", get_cpu_patterns)
+
+# Patterns for alarms and reminders
+set_reminder_patterns = [
+    [{"LOWER": {"IN": ["set", "create", "add"]}}, {"LOWER": "a", "OP": "?"}, {"LOWER": "reminder"}, {"LOWER": "to"}, {"IS_ALPHA": True, "OP": "+"}]
+]
+matcher.add("set_reminder", set_reminder_patterns)
+
+set_alarm_patterns = [
+    [{"LOWER": {"IN": ["set", "create", "add"]}}, {"LOWER": "an", "OP": "?"}, {"LOWER": "alarm"}, {"LOWER": "for"}, {"IS_ALPHA": True, "OP": "+"}]
+]
+matcher.add("set_alarm", set_alarm_patterns)
+
+get_memory_patterns = [
+    [{"LOWER": {"IN": ["what", "check"]}}, {"LOWER": "is"}, {"LOWER": "the"}, {"LOWER": "memory"}, {"LOWER": "usage"}]
+]
+matcher.add("get_memory_usage", get_memory_patterns)
+
+get_battery_patterns = [
+    [{"LOWER": {"IN": ["what", "check"]}}, {"LOWER": "is"}, {"LOWER": "the"}, {"LOWER": "battery"}, {"LOWER": "status"}]
+]
+matcher.add("get_battery_status", get_battery_patterns)
+
 # Pattern for teaching a new command
 teach_command_patterns = [
     [{"LOWER": "teach"}, {"LOWER": "command"}, {"IS_ALPHA": True, "OP": "+"}, {"LOWER": "to"}, {"IS_ALPHA": True, "OP": "+"}]
@@ -95,7 +122,10 @@ def parse_command(text):
 
     # Extract the entity (the part of the text that isn't the keyword)
     span = doc[start:end]
-    keywords_to_remove = ["open", "launch", "start", "close", "exit", "terminate", "quit", "search", "for", "find", "look", "google", "what", "who", "is", "are", "define"]
+    keywords_to_remove = [
+        "open", "launch", "start", "close", "exit", "terminate", "quit", "search", "for", "find", "look", "google",
+        "what", "who", "is", "are", "define", "set", "a", "an", "reminder", "to", "alarm"
+    ]
     entity = " ".join([token.text for token in span if token.lower_ not in keywords_to_remove])
 
     return intent, entity.strip()
