@@ -14,6 +14,7 @@ import json
 import importlib.util
 import threading
 import time
+import shutil
 from dotenv import load_dotenv
 from . import app_discovery
 from . import window_manager
@@ -52,6 +53,7 @@ class Assistant:
         self.recognizer = sr.Recognizer()
         self.waiting_for_confirmation = False
         self.pending_web_search_query = None
+        self.pending_file_move = None
 
         # Conversational AI history
         self.conversation_history = None
@@ -178,9 +180,12 @@ class Assistant:
                 elif self.pending_web_search_query:
                     self.perform_web_search(self.pending_web_search_query)
                     self.pending_web_search_query = None
+                elif self.pending_file_move:
+                    self.execute_file_move()
             elif "no" in command_str:
                 self.waiting_for_confirmation = False
                 self.pending_web_search_query = None
+                self.pending_file_move = None
                 if hasattr(self, 'pending_summarization_url'):
                     del self.pending_summarization_url
                 self.speak("Okay, I won't do that.")
@@ -442,6 +447,25 @@ class Assistant:
             usage_tracker.track_file_usage(filename)
         except Exception as e:
             self.speak(str(e), is_error=True)
+
+    def execute_file_move(self):
+        """Executes the pending file move operation after confirmation."""
+        if not self.pending_file_move:
+            return
+
+        files = self.pending_file_move["files"]
+        dest = self.pending_file_move["dest"]
+        moved_count = 0
+
+        try:
+            for f in files:
+                shutil.move(f, dest)
+                moved_count += 1
+            self.speak(f"Successfully moved {moved_count} files.")
+        except Exception as e:
+            self.speak(f"An error occurred while moving files: {e}", is_error=True)
+        finally:
+            self.pending_file_move = None
 
     def play_on_youtube(self, query):
         """Searches for and plays a video on YouTube."""

@@ -49,6 +49,12 @@ def test_parse_play_on_youtube():
     assert intent == "play_on_youtube"
     assert args == "epic rock music"
 
+def test_parse_move_files():
+    """Tests parsing the 'move_files' intent."""
+    intent, args = parse_command("move all PDFs from Downloads to Documents")
+    assert intent == "move_files"
+    assert args == "PDFs Downloads Documents"
+
 def test_parse_invalid_command():
     """Tests that invalid commands are not parsed."""
     intent, args = parse_command("this is not a command")
