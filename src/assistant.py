@@ -68,6 +68,8 @@ class Assistant:
         self.greeting_thread.start()
         self.gesture_thread = threading.Thread(target=self._gesture_control_loop, daemon=True)
         self.gesture_thread.start()
+        self.mood_thread = threading.Thread(target=self._mood_awareness_loop, daemon=True)
+        self.mood_thread.start()
 
         self.context_thread = threading.Thread(target=self._context_awareness_loop, daemon=True)
         self.context_thread.start()
@@ -537,6 +539,25 @@ class Assistant:
                 self.vision.detected_gesture = None # Clear gesture after handling
 
             time.sleep(1) # Check for gestures every second
+
+    def _mood_awareness_loop(self):
+        """Periodically checks the user's emotion and offers suggestions."""
+        suggestion_made = False
+        while True:
+            # Check only if the user is present and we haven't already made a suggestion
+            if self.vision.user_present and not suggestion_made:
+                emotion = self.vision.detected_emotion
+                if emotion in ["sad", "neutral"]: # 'neutral' can be a proxy for tired/bored
+                    self.speak("You seem a bit down. Would you like me to play some uplifting music on YouTube?")
+                    self.waiting_for_confirmation = True
+                    self.pending_web_search_query = "uplifting instrumental music"
+                    suggestion_made = True # Ensure we don't ask again this session
+
+            # Reset if the user leaves
+            if not self.vision.user_present:
+                suggestion_made = False
+
+            time.sleep(10) # Check every 10 seconds
 
     def play_on_youtube(self, query):
         """Searches for and plays a video on YouTube."""

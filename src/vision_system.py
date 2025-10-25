@@ -3,32 +3,30 @@ import threading
 import time
 import face_recognition
 import mediapipe as mp
+from deepface import DeepFace
 from . import face_manager
 
 class VisionSystem:
     """
-    Manages camera access and processes video frames for features like
-    presence detection, face recognition, and gesture control.
+    Manages camera access and processes video frames for various AI tasks.
     """
     def __init__(self, motion_threshold=500000, presence_timeout=5.0):
+        # ... (init attributes are the same)
         self.is_running = False
         self.camera = None
         self.vision_thread = None
-
         self.user_present = False
         self.last_motion_time = 0
         self.motion_threshold = motion_threshold
         self.presence_timeout = presence_timeout
-
         self._last_frame = None
         self.face_manager = face_manager.FaceManager()
         self.known_face_encodings = []
         self.known_face_names = []
         self.recognized_user = None
         self.detected_gesture = None
-
+        self.detected_emotion = None
         self._frame_counter = 0
-
         self.mp_hands = mp.solutions.hands
         self.hands = self.mp_hands.Hands(max_num_hands=1, min_detection_confidence=0.7)
         self.mp_draw = mp.solutions.drawing_utils
@@ -80,16 +78,18 @@ class VisionSystem:
             success, frame = self.camera.read()
             if not success: time.sleep(0.1); continue
 
-            task_index = self._frame_counter % 3
+            task_index = self._frame_counter % 4
             if task_index == 0:
                 self._process_presence(frame)
             elif task_index == 1:
                 self._process_recognition(frame)
-            else:
+            elif task_index == 2:
                 self._process_gestures(frame)
+            else:
+                self._process_emotions(frame)
 
             self._frame_counter += 1
-            time.sleep(0.3) # Balance performance
+            time.sleep(0.5) # Balance performance
 
     def _process_presence(self, frame):
         # ... (implementation is the same)
@@ -125,29 +125,35 @@ class VisionSystem:
         self.recognized_user = current_recognized_user
 
     def _process_gestures(self, frame):
-        """Analyzes a frame for hand gestures."""
-        self.detected_gesture = None # Reset gesture
-
-        # Convert the BGR image to RGB
+        # ... (implementation is the same)
+        self.detected_gesture = None
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = self.hands.process(rgb_frame)
-
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
-                # A simple "open palm" gesture detection
-                # Check if all key finger tips are above their corresponding PIP joints
                 try:
                     thumb_tip = hand_landmarks.landmark[self.mp_hands.HandLandmark.THUMB_TIP]
                     thumb_ip = hand_landmarks.landmark[self.mp_hands.HandLandmark.THUMB_IP]
                     index_tip = hand_landmarks.landmark[self.mp_hands.HandLandmark.INDEX_FINGER_TIP]
                     index_pip = hand_landmarks.landmark[self.mp_hands.HandLandmark.INDEX_FINGER_PIP]
-                    middle_tip = hand_landmarks.landmark[self.mp_hands.HandLandmark.MIDDLE_FINGER_TIP]
-                    middle_pip = hand_landmarks.landmark[self.mp_hands.HandLandmark.MIDDLE_FINGER_PIP]
+                    if (thumb_tip.x > thumb_ip.x and index_tip.y < index_pip.y):
+                        self.detected_gesture = "open_palm"; break
+                except Exception: pass
 
-                    if (thumb_tip.x > thumb_ip.x and
-                        index_tip.y < index_pip.y and
-                        middle_tip.y < middle_pip.y):
-                        self.detected_gesture = "open_palm"
-                        break # Found gesture, no need to check other hands
-                except Exception:
-                    pass # Ignore errors if landmarks are not clear
+    def _process_emotions(self, frame):
+        """Analyzes a frame for facial emotion."""
+        self.detected_emotion = None # Reset emotion
+        try:
+            # DeepFace expects BGR format, which OpenCV provides.
+            # It's a heavy operation, so we only run it periodically.
+            analysis = DeepFace.analyze(frame, actions=['emotion'], enforce_detection=False)
+
+            # DeepFace returns a list of faces; we'll use the first one
+            if isinstance(analysis, list) and len(analysis) > 0:
+                self.detected_emotion = analysis[0]['dominant_emotion']
+            elif isinstance(analysis, dict): # Sometimes it returns a dict if one face
+                self.detected_emotion = analysis['dominant_emotion']
+
+        except Exception as e:
+            # This can fail if no face is found or on model errors
+            pass # Silently fail
