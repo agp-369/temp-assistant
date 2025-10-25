@@ -11,7 +11,6 @@ import pyaudio
 import struct
 import pyautogui
 import json
-from fuzzywuzzy import process
 from dotenv import load_dotenv
 from . import app_discovery
 from . import window_manager
@@ -118,34 +117,21 @@ class Assistant:
     # --- Command Processing ---
     def process_command(self, command_str):
         if self.waiting_for_confirmation:
-            yes_match = process.extractOne(command_str, ["yes", "yeah", "yep"])
-            no_match = process.extractOne(command_str, ["no", "nope", "nah"])
-
-            if yes_match and yes_match[1] >= 80: # Threshold for 'yes'
+            if "yes" in command_str:
                 self.waiting_for_confirmation = False
                 if self.pending_web_search_query:
                     self.perform_web_search(self.pending_web_search_query)
                     self.pending_web_search_query = None
-                return True
-            elif no_match and no_match[1] >= 80: # Threshold for 'no'
+            elif "no" in command_str:
                 self.waiting_for_confirmation = False
                 self.pending_web_search_query = None
                 self.speak("Okay, I won't search online.")
-                return True
             else:
                 self.speak("Please answer with yes or no.")
-                return True
+            return True
 
-        else:
-            # Check for out-of-context yes/no
-            yes_match = process.extractOne(command_str, ["yes", "yeah", "yep"])
-            no_match = process.extractOne(command_str, ["no", "nope", "nah"])
+        command, args = parse_command(command_str)
 
-            if (yes_match and yes_match[1] >= 80) or (no_match and no_match[1] >= 80):
-                self.speak("I'm not waiting for a yes or no response right now.")
-                return True
-
-            command, args = parse_command(command_str)
         if command == "exit":
             self.speak("Goodbye!")
             return False # Signal to exit

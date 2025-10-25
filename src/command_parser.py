@@ -1,81 +1,67 @@
-from fuzzywuzzy import process
+import spacy
+from spacy.matcher import Matcher
 
-# Define the commands and their variations
-COMMANDS = {
-    "open_app": {
-        "keywords": ["open", "launch", "start"],
-        "min_ratio": 80
-    },
-    "close_app": {
-        "keywords": ["close", "exit", "terminate", "quit"],
-        "min_ratio": 80
-    },
-    "open_file": {
-        "keywords": ["open file", "show file"],
-        "min_ratio": 85
-    },
-    "play_youtube": {
-        "keywords": ["play on youtube", "find on youtube", "search on youtube"],
-        "min_ratio": 85
-    },
-    "type_text": {
-        "keywords": ["type", "write", "enter"],
-        "min_ratio": 80
-    },
-    "exit": {
-        "keywords": ["exit", "goodbye", "quit", "shutdown"],
-        "min_ratio": 90
-    },
-    "search": {
-        "keywords": ["search", "find online", "look up"],
-        "min_ratio": 80
-    },
-    "get_time": {
-        "keywords": ["time", "what time is it", "current time"],
-        "min_ratio": 85
-    },
-    "get_weather": {
-        "keywords": ["weather", "how's the weather", "temperature"],
-        "min_ratio": 90
-    },
-    "greet": {
-        "keywords": ["hello", "hi", "how are you", "hey"],
-        "min_ratio": 80
-    },
-    "get_date": {
-        "keywords": ["date", "what's the date", "today's date"],
-        "min_ratio": 85
-    },
-    "open_uwp_app_direct": {
-        "keywords": ["open uwp app", "launch uwp app"],
-        "min_ratio": 85
-    }
-}
+# Load the spaCy model
+try:
+    nlp = spacy.load("en_core_web_sm")
+except OSError:
+    print("Downloading spaCy model 'en_core_web_sm'...")
+    from spacy.cli import download
+    download("en_core_web_sm")
+    nlp = spacy.load("en_core_web_sm")
+
+# --- Intent Patterns ---
+matcher = Matcher(nlp.vocab)
+
+# Pattern for opening applications
+open_app_patterns = [
+    [{"LOWER": {"IN": ["open", "launch", "start"]}}, {"IS_ALPHA": True, "OP": "+"}],
+    [{"LOWER": {"IN": ["open", "launch", "start"]}}, {"IS_ALPHA": True, "OP": "+"}, {"IS_ALPHA": True, "OP": "*"}]
+]
+matcher.add("open_app", open_app_patterns)
+
+# Pattern for closing applications
+close_app_patterns = [
+    [{"LOWER": {"IN": ["close", "exit", "terminate", "quit"]}}, {"IS_ALPHA": True, "OP": "+"}],
+    [{"LOWER": {"IN": ["close", "exit", "terminate", "quit"]}}, {"IS_ALPHA": True, "OP": "+"}, {"IS_ALPHA": True, "OP": "*"}]
+]
+matcher.add("close_app", close_app_patterns)
+
+# Pattern for searching the web
+search_patterns = [
+    [{"LOWER": {"IN": ["search", "find", "look", "google"]}}, {"LOWER": "for", "OP": "?"}, {"IS_ALPHA": True, "OP": "+"}]
+]
+matcher.add("search", search_patterns)
+
+# Pattern for getting the time
+get_time_patterns = [
+    [{"LOWER": "what"}, {"LOWER": "time"}, {"LOWER": "is"}, {"LOWER": "it"}],
+    [{"LOWER": "get"}, {"LOWER": "the"}, {"LOWER": "time"}]
+]
+matcher.add("get_time", get_time_patterns)
+
 
 def parse_command(text):
     """
-    Parses a command from the user's speech.
+    Parses a command from the user's speech using spaCy's Matcher.
     Returns the command and the extracted arguments.
     """
     if not text:
         return None, None
 
-    # Find the best matching command
-    best_match_command = None
-    best_match_ratio = 0
-    best_match_keyword = None
+    doc = nlp(text)
+    matches = matcher(doc)
 
-    for command, data in COMMANDS.items():
-        result = process.extractOne(text, data["keywords"])
-        if result and result[1] > best_match_ratio and result[1] >= data["min_ratio"]:
-            best_match_ratio = result[1]
-            best_match_command = command
-            best_match_keyword = result[0]
-
-    if not best_match_command:
+    if not matches:
         return None, None
 
-    # Extract the arguments from the text
-    args_text = text.replace(best_match_keyword, "").strip()
+    # Get the best match (the one with the longest span)
+    best_match = max(matches, key=lambda m: m[2] - m[1])
+    match_id, start, end = best_match
+    intent = nlp.vocab.strings[match_id]
 
-    return best_match_command, args_text
+    # Extract the entity (the part of the text that isn't the keyword)
+    span = doc[start:end]
+    entity = " ".join([token.text for token in span if token.lower_ not in ["open", "launch", "start", "close", "exit", "terminate", "quit", "search", "for", "find", "look", "google"]])
+
+    return intent, entity.strip()
