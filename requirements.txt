@@ -21,3 +21,4 @@ plyer
 opencv-python
 face_recognition
 dlib
+mediapipe

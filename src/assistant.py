@@ -66,6 +66,8 @@ class Assistant:
         self.auto_lock_thread.start()
         self.greeting_thread = threading.Thread(target=self._greeting_loop, daemon=True)
         self.greeting_thread.start()
+        self.gesture_thread = threading.Thread(target=self._gesture_control_loop, daemon=True)
+        self.gesture_thread.start()
 
         self.context_thread = threading.Thread(target=self._context_awareness_loop, daemon=True)
         self.context_thread.start()
@@ -525,6 +527,16 @@ class Assistant:
                 greeted_users = []
 
             time.sleep(3)
+
+    def _gesture_control_loop(self):
+        """Periodically checks for gestures and performs actions."""
+        while True:
+            if self.vision.detected_gesture == "open_palm":
+                self.speak("Open palm detected, pausing media.")
+                pyautogui.press('space')
+                self.vision.detected_gesture = None # Clear gesture after handling
+
+            time.sleep(1) # Check for gestures every second
 
     def play_on_youtube(self, query):
         """Searches for and plays a video on YouTube."""
