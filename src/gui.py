@@ -23,7 +23,7 @@ class AssistantGUI(ctk.CTk):
         self.send_button = ctk.CTkButton(self.input_frame, text="Send", command=self.send_command)
         self.send_button.pack(side='right', padx=5)
 
-        self.voice_button = ctk.CTkButton(self.input_frame, text="Activate Voice", command=self.activate_voice)
+        self.voice_button = ctk.CTkButton(self.input_frame, text="Start Listening", command=self.activate_voice)
         self.voice_button.pack(side='right')
 
     def send_command(self, event=None):

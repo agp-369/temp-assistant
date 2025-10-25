@@ -7,6 +7,7 @@ def main():
     """
     assistant = Assistant()
     gui = AssistantGUI(assistant)
+    gui.title("Nora")
     gui.start()
 
 if __name__ == "__main__":

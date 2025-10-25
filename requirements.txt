@@ -9,3 +9,9 @@ python-Levenshtein
 customtkinter
 pyautogui
 pywin32; sys_platform == 'win32'
+pywinauto
+spacy
+beautifulsoup4
+transformers
+torch
+requests
