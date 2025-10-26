@@ -31,12 +31,13 @@ if sys.platform == "win32":
     import win32api
 
 class Assistant:
-    def __init__(self, output_callback=None):
+    def __init__(self, output_callback=None, status_callback=None):
         # ... (most init is the same)
         self.config = self.load_config()
         self.assistant_name = self.config.get("assistant_name", "Nora")
         self.wake_word = self.config.get("wake_word", "porcupine")
         self.output_callback = output_callback
+        self.status_callback = status_callback
         self.apps = app_discovery.load_cached_apps()
         self.custom_commands = custom_commands.load_commands()
         self.plugins, self.plugin_command_map = self.load_plugins()
@@ -76,9 +77,31 @@ class Assistant:
         else: print(f"{self.assistant_name}: {text}")
         try: self.engine.say(text); self.engine.runAndWait()
         except Exception as e: print(f"TTS Error: {e}")
-    # ... other methods unchanged until process_command
+
+    def listen_for_command(self):
+        """Uses the microphone to listen for a command and returns the recognized text."""
+        if self.status_callback: self.status_callback("Listening...")
+        with sr.Microphone() as source:
+            self.recognizer.adjust_for_ambient_noise(source)
+            self.speak("How can I help?")
+            try:
+                audio = self.recognizer.listen(source, timeout=5, phrase_time_limit=5)
+                if self.status_callback: self.status_callback("Recognizing...")
+                command = self.recognizer.recognize_google(audio)
+                return command.lower()
+            except sr.WaitTimeoutError:
+                self.speak("I didn't hear anything. Please try again.")
+            except sr.UnknownValueError:
+                self.speak("Sorry, I couldn't understand that.")
+            except sr.RequestError as e:
+                self.speak(f"Could not request results; {e}", is_error=True)
+            finally:
+                if self.status_callback: self.status_callback("Ready")
+        return None
 
     def process_command(self, command_str, from_plan=False):
+        if self.status_callback: self.status_callback("Processing...")
+
         # Add conversation to memory *unless* it's a confirmation
         if not self.waiting_for_confirmation:
             self.memory.add_to_memory(f"User: {command_str}")
@@ -147,6 +170,7 @@ class Assistant:
         response, self.conversation_history = chitchat.get_chitchat_response(command_str, self.conversation_history)
         self.speak(response)
         self.memory.add_to_memory(f"Nora: {response}")
+        if self.status_callback: self.status_callback("Ready")
         return True
 
     def handle_core_command(self, command, args):

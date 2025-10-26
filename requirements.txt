@@ -28,3 +28,5 @@ ultralytics
 python-docx
 faiss-cpu
 sentence-transformers
+pystray
+Pillow
