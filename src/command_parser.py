@@ -121,6 +121,12 @@ teach_command_patterns = [
 ]
 matcher.add("teach_command", teach_command_patterns)
 
+# Pattern for explaining a document
+explain_document_patterns = [
+    [{"LOWER": {"IN": ["read", "explain", "summarize"]}}, {"LOWER": "and", "OP": "?"}, {"LOWER": "explain", "OP": "?"}, {"LOWER": "the", "OP": "?"}, {"LOWER": "file", "OP": "?"}, {"IS_ASCII": True, "OP": "+"}]
+]
+matcher.add("explain_document", explain_document_patterns)
+
 
 def parse_command(text):
     """
@@ -173,7 +179,8 @@ def parse_command(text):
         "play_on_youtube": ["play", "on", "youtube"],
         "find_files": ["find", "my", "files"],
         "move_files": ["move", "all", "from", "to"],
-        "learn_face": ["learn", "my", "face", "as"]
+        "learn_face": ["learn", "my", "face", "as"],
+        "explain_document": ["read", "explain", "summarize", "and", "the", "file"]
     }.get(intent, [])
 
     entity = " ".join([token.text for token in span if token.lower_ not in keywords_to_remove])

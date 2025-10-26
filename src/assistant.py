@@ -22,6 +22,8 @@ from .command_parser import parse_command
 from .plugin_interface import Plugin
 from . import task_planner
 from . import memory_manager
+from . import document_reader
+from . import llm_handler
 
 load_dotenv()
 
@@ -191,7 +193,8 @@ class Assistant:
             "answer_question": self.answer_question,
             "learn_face": lambda a: self.speak(self.vision.learn_current_user_face(a)),
             "read_text": self.handle_read_text,
-            "identify_objects": self.handle_identify_objects
+            "identify_objects": self.handle_identify_objects,
+            "explain_document": self.explain_document
         }
         if command in handlers:
             if command == "teach_command":
@@ -230,11 +233,48 @@ class Assistant:
         if not objects: self.speak("I don't see any recognizable objects.")
         else: self.speak(f"I can see a {', a '.join(objects)}.")
 
+    def explain_document(self, file_path):
+        """
+        Reads a document, sends its content to an LLM for explanation,
+        and speaks the result. Handles the case where the LLM is not configured.
+        """
+        self.speak(f"Analyzing the document: {os.path.basename(file_path)}...")
+
+        # 1. Find the full file path
+        full_path = self.find_file(file_path)
+        if not full_path:
+            self.speak(f"Sorry, I couldn't find the file '{file_path}'.")
+            return
+
+        # 2. Read the document content
+        content = document_reader.read_document(full_path)
+        if content.startswith("Error:"):
+            self.speak(content, is_error=True)
+            return
+
+        if not content.strip():
+            self.speak("The document appears to be empty.")
+            return
+
+        # 3. Get the explanation from the LLM handler
+        self.speak("The document is being sent for explanation. This may take a moment.")
+        result = llm_handler.get_llm_explanation(content)
+
+        # 4. Speak the result
+        if result["status"] == "success":
+            self.speak("Here is the explanation:")
+            self.speak(result["explanation"])
+        elif result["status"] == "not_configured":
+            self.speak(result["message"])
+        else: # Handle errors
+            self.speak(result["message"], is_error=True)
+
+
     # ... (rest of the assistant's methods are largely unchanged)
     def open_application(self, app_name):
         if window_manager.bring_window_to_front(app_name):
             self.speak(f"'{app_name}' is already running."); return
-        executable_path = self.find_executable(app_name)
+        executable_path = app_discovery.find_app_path(app_name, self.apps)
         if executable_path:
             try: subprocess.Popen([executable_path]); self.speak(f"Opening {app_name}...")
             except Exception as e: self.speak(f"Error opening {app_name}: {e}", is_error=True)
@@ -248,7 +288,7 @@ class Assistant:
             self.speak(f"Could not find or close '{app_name}'.")
         else: self.speak(f"Closed {app_name}.")
     def open_file(self, filename):
-        filepath = self.find_file(filename)
+        filepath = usage_tracker.find_file_path(filename)
         if not filepath: self.speak(f"File '{filename}' not found."); return
         try:
             if sys.platform == "win32": os.startfile(filepath)
