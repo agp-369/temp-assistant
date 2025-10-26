@@ -25,3 +25,6 @@ mediapipe
 deepface
 pytesseract
 ultralytics
+python-docx
+faiss-cpu
+sentence-transformers
