@@ -7,7 +7,7 @@
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     echo "Detected Linux. Installing system dependencies..."
     sudo apt-get update
-    sudo apt-get install -y portaudio19-dev python3-pyaudio scrot python3-tk python3-dev
+    sudo apt-get install -y portaudio19-dev python3-pyaudio scrot python3-tk python3-dev tesseract-ocr
 fi
 
 # Now, install the Python dependencies.

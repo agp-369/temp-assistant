@@ -86,6 +86,25 @@ learn_face_patterns = [
 ]
 matcher.add("learn_face", learn_face_patterns)
 
+# Pattern for reading text via OCR
+read_text_patterns = [
+    [{"LOWER": {"IN": ["read", "scan"]}}, {"LOWER": "this"}, {"LOWER": {"IN": ["document", "page", "text"]}}]
+]
+matcher.add("read_text", read_text_patterns)
+
+# Pattern for identifying objects
+identify_objects_patterns = [
+    [{"LOWER": {"IN": ["what", "identify"]}}, {"LOWER": "do"}, {"LOWER": "you"}, {"LOWER": "see"}],
+    [{"LOWER": "identify"}, {"LOWER": "objects"}]
+]
+matcher.add("identify_objects", identify_objects_patterns)
+
+# Pattern for creating documents
+create_document_patterns = [
+    [{"LOWER": "create"}, {"LOWER": "document"}, {"LOWER": "about"}, {"IS_ALPHA": True, "OP": "+"}]
+]
+matcher.add("create_document", create_document_patterns)
+
 get_memory_patterns = [
     [{"LOWER": {"IN": ["what", "check"]}}, {"LOWER": "is"}, {"LOWER": "the"}, {"LOWER": "memory"}, {"LOWER": "usage"}]
 ]
