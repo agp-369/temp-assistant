@@ -30,3 +30,5 @@ faiss-cpu
 sentence-transformers
 pystray
 Pillow
+openai
+pypdf2
