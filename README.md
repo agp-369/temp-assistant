@@ -43,3 +43,15 @@ The application is designed to be resilient. If you perform a core installation,
 ```bash
 python main.py
 ```
+
+## Vision Features
+
+To enable the face recognition features, you must install the vision dependencies:
+```bash
+pip install -r requirements-vision.txt
+```
+**Note:** This may take a long time and requires a C++ compiler and CMake.
+
+### Available Vision Commands
+*   `learn my face as [your name]`: Teaches the assistant to recognize your face.
+*   `who am I`: The assistant will respond with the name of the recognized user.

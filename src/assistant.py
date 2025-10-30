@@ -9,7 +9,6 @@ import speech_recognition as sr
 import pvporcupine
 import pyaudio
 import struct
-import pyautogui
 import json
 import importlib.util
 import threading
@@ -188,6 +187,7 @@ class Assistant:
             "get_time": self.get_time,
             "get_date": self.get_date,
             "teach_command": lambda: self.teach_command(args.get("command_name"), args.get("actions")),
+            "who_are_you": self.who_are_you,
             # ... other commands that take specific args
         }
         if command in handlers:
@@ -318,6 +318,7 @@ class Assistant:
             if not self.vision.user_present: greeted_users = []
             time.sleep(3)
     def _gesture_control_loop(self):
+        import pyautogui
         while True:
             if self.vision.detected_gesture == "open_palm":
                 self.speak("Open palm detected, pausing media."); pyautogui.press('space'); self.vision.detected_gesture = None
@@ -343,4 +344,12 @@ class Assistant:
     def get_time(self): self.speak(f"The time is {datetime.datetime.now().strftime('%I:%M %p')}.")
     def get_date(self): self.speak(f"Today is {datetime.date.today().strftime('%B %d, %Y')}.")
     def get_greeting(self): self.speak("Hello! How can I help?")
+
+    def who_are_you(self):
+        """Responds with the name of the recognized user."""
+        if self.vision.recognized_user:
+            self.speak(f"I see you, {self.vision.recognized_user}.")
+        else:
+            self.speak("I don't recognize you. You can teach me to recognize you by saying 'learn my face as [your name]'.")
+
     # ... (And so on for other simple commands)

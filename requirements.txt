@@ -17,6 +17,7 @@ transformers
 torch
 wikipedia
 pytest
+pytest-xvfb
 plyer
 opencv-python
 face_recognition

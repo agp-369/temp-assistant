@@ -39,6 +39,7 @@ INTENT_PATTERNS = {
     },
     "get_time": {"patterns": [[{"LOWER": "what"}, {"LOWER": "time"}, {"LOWER": "is"}, {"LOWER": "it"}]]},
     "get_date": {"patterns": [[{"LOWER": "what"}, {"LOWER": "is"}, {"LOWER": "today's"}, {"LOWER": "date"}]]},
+    "who_are_you": {"patterns": [[{"LOWER": "who"}, {"LOWER": "am"}, {"LOWER": "i"}]]},
     "answer_question": {
         "patterns": [
             [{"LOWER": {"IN": ["what", "who"]}}, {"LOWER": {"IN": ["is", "are"]}}, {"TEXT": {"REGEX": ".*"}, "OP": "+"}]
