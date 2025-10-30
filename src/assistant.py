@@ -177,33 +177,22 @@ class Assistant:
 
     def handle_core_command(self, command, args):
         """Handles the built-in, non-plugin commands."""
+        # Note: 'args' is now a dictionary of named arguments.
         handlers = {
-            "exit": lambda a: self.speak("Goodbye!"),
-            "open_app": self.open_application,
-            "close_app": self.close_application,
-            "open_file": self.open_file,
-            "play_youtube": self.play_on_youtube,
-            "type_text": self.type_text,
-            "search": self.perform_web_search,
+            "exit": lambda: self.speak("Goodbye!"),
+            "open_app": lambda: self.open_application(args.get("app_name")),
+            "close_app": lambda: self.close_application(args.get("app_name")),
+            "play_youtube": lambda: self.play_on_youtube(args.get("video_title")),
+            "search": lambda: self.perform_web_search(args.get("query")),
+            "answer_question": lambda: self.answer_question(args.get("query")),
             "get_time": self.get_time,
-            "get_weather": self.get_weather, # Should be a plugin, here for legacy
-            "greet": self.get_greeting,
             "get_date": self.get_date,
-            "teach_command": lambda a: self.teach_command(a[0], a[1]),
-            "answer_question": self.answer_question,
-            "learn_face": lambda a: self.speak(self.vision.learn_current_user_face(a)),
-            "read_text": self.handle_read_text,
-            "identify_objects": self.handle_identify_objects,
-            "explain_document": self.explain_document
+            "teach_command": lambda: self.teach_command(args.get("command_name"), args.get("actions")),
+            # ... other commands that take specific args
         }
         if command in handlers:
-            if command == "teach_command":
-                handlers[command](args)
-            elif command == "exit":
-                handlers[command](args)
-                return False # Signal exit
-            else:
-                handlers[command](args)
+            handlers[command]()
+            if command == "exit": return False # Signal exit
             return True
         return False
 
