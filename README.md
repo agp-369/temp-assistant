@@ -55,3 +55,18 @@ pip install -r requirements-vision.txt
 ### Available Vision Commands
 *   `learn my face as [your name]`: Teaches the assistant to recognize your face.
 *   `who am I`: The assistant will respond with the name of the recognized user.
+
+## Phone Integration (SMS)
+
+The assistant can send SMS messages using Twilio. To enable this feature, you will need to:
+
+1.  Create a free account on [Twilio](https://www.twilio.com/).
+2.  Get a Twilio phone number.
+3.  Add the following credentials to your `.env` file:
+    ```
+    TWILIO_ACCOUNT_SID="your_account_sid"
+    TWILIO_AUTH_TOKEN="your_auth_token"
+    TWILIO_PHONE_NUMBER="your_twilio_phone_number"
+    ```
+4.  You can then use the following command:
+    *   `send a text to [phone number] saying [message]`

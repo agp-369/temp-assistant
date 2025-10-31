@@ -33,3 +33,4 @@ pystray
 Pillow
 openai
 pypdf2
+twilio

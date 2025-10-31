@@ -65,6 +65,11 @@ INTENT_PATTERNS = {
             {"name": "actions", "type": "REGEX", "value": "to (.*)"}
         ]
     },
+    "send_sms": {
+        "patterns": [
+            [{"LOWER": {"IN": ["send", "text"]}}, {"LOWER": "a", "OP": "?"}, {"LOWER": "message", "OP": "?"}, {"LOWER": "to"}, {"LIKE_NUM": True}, {"LOWER": "saying"}, {"TEXT": {"REGEX": ".*"}}]
+        ]
+    },
     # Add other intents here...
 }
 
@@ -106,6 +111,8 @@ def parse_command(text):
         intent = "play_on_youtube"
     elif "move" in text and "from" in text and "to" in text:
         intent = "move_files"
+    elif ("send" in text or "text" in text) and "to" in text and "saying" in text:
+        intent = "send_sms"
     else:
         # Fallback to spaCy Matcher for other commands
         doc = nlp(text)
@@ -131,6 +138,12 @@ def parse_command(text):
         args['file_type'] = file_type
         args['source'] = source_dest[0].strip()
         args['destination'] = source_dest[1].strip()
+    elif intent == 'send_sms':
+        parts = text.split(' to ')
+        phone_part = parts[1].split(' saying ')[0]
+        message_part = parts[1].split(' saying ')[1]
+        args['to_number'] = phone_part.strip()
+        args['message'] = message_part.strip()
     else: # Default argument extraction for Matcher-based intents
         span = doc[best_match[1]:best_match[2]]
         if intent == 'open_app':
