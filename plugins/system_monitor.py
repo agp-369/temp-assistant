@@ -23,22 +23,25 @@ class SystemMonitorPlugin(Plugin):
         return False # This plugin is intent-based
 
     def get_cpu_usage(self):
-        """Returns the current CPU usage percentage."""
-        return f"Current CPU usage is at {psutil.cpu_percent()}%."
+        """Returns the current CPU usage percentage as a float."""
+        return psutil.cpu_percent(interval=None)
 
     def get_memory_usage(self):
-        """Returns the current memory usage percentage."""
-        memory_info = psutil.virtual_memory()
-        return f"Current memory usage is at {memory_info.percent}%."
+        """Returns the current memory usage percentage as a float."""
+        return psutil.virtual_memory().percent
 
     def get_battery_status(self):
-        """Returns the battery status, if available."""
+        """
+        Gets the battery status, including percentage and power plugged-in status.
+
+        Returns:
+            dict: A dictionary containing 'percent' and 'power_plugged',
+                  or None if no battery is detected.
+        """
         battery = psutil.sensors_battery()
         if battery:
-            plugged = "plugged in" if battery.power_plugged else "not plugged in"
-            return f"Battery is at {battery.percent}%, and is {plugged}."
-        else:
-            return "No battery detected in the system."
+            return {"percent": battery.percent, "power_plugged": battery.power_plugged}
+        return None
 
     def check_battery_alert(self):
         """Checks for low battery and sends a notification if needed."""
@@ -61,10 +64,17 @@ class SystemMonitorPlugin(Plugin):
         intent, _ = command # Unpack the intent and args tuple
 
         if intent == "get_cpu_usage":
-            assistant.speak(self.get_cpu_usage())
+            cpu_usage = self.get_cpu_usage()
+            assistant.speak(f"Current CPU usage is at {cpu_usage}%.")
         elif intent == "get_memory_usage":
-            assistant.speak(self.get_memory_usage())
+            mem_usage = self.get_memory_usage()
+            assistant.speak(f"Current memory usage is at {mem_usage}%.")
         elif intent == "get_battery_status":
-            assistant.speak(self.get_battery_status())
+            battery_status = self.get_battery_status()
+            if battery_status:
+                plugged = "plugged in" if battery_status['power_plugged'] else "not plugged in"
+                assistant.speak(f"Battery is at {battery_status['percent']}%, and is {plugged}.")
+            else:
+                assistant.speak("No battery detected in the system.")
         else:
             assistant.speak("Sorry, I don't know how to handle that system command.")

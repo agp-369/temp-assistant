@@ -181,9 +181,20 @@ class AssistantGUI(ctk.CTk):
         """Starts a background thread to update system stats."""
         def monitor_loop():
             while True:
-                self.cpu_label.configure(text=f"CPU: {self.system_monitor_plugin.get_cpu_usage()}")
-                self.mem_label.configure(text=f"Memory: {self.system_monitor_plugin.get_memory_usage()}")
-                self.bat_label.configure(text=f"Battery: {self.system_monitor_plugin.get_battery_status()}")
+                # Update system stats
+                cpu_usage = self.system_monitor_plugin.get_cpu_usage()
+                mem_usage = self.system_monitor_plugin.get_memory_usage()
+                battery_status = self.system_monitor_plugin.get_battery_status()
+
+                self.cpu_label.configure(text=f"CPU: {cpu_usage:.1f}%")
+                self.mem_label.configure(text=f"Memory: {mem_usage:.1f}%")
+
+                if battery_status:
+                    plugged_status = "🔌" if battery_status['power_plugged'] else "🔋"
+                    self.bat_label.configure(text=f"Battery: {battery_status['percent']}% {plugged_status}")
+                else:
+                    self.bat_label.configure(text="Battery: N/A")
+
                 self.system_monitor_plugin.check_battery_alert()
 
                 # Update alarms
