@@ -9,7 +9,7 @@ class FileManagerPlugin(Plugin):
     """
     def get_intent_map(self):
         return {
-            "find_files": self.handle,
+            "find_file": self.handle,
             "move_files": self.handle
         }
 
@@ -29,21 +29,35 @@ class FileManagerPlugin(Plugin):
         }
         return folder_map.get(folder_name.lower(), home) # Default to home dir
 
-    def find_files(self, assistant, file_type=None, folder=None):
-        """Finds files based on type and/or folder."""
-        search_path = self._resolve_folder_path(folder) if folder else os.path.expanduser("~")
+    def find_file(self, filename=None, filetype=None, directory=None):
+        """
+        Finds files based on filename, filetype, and/or directory.
 
-        pattern = f"**/*.{file_type.lower() if file_type else '*'}"
-        files = glob.glob(os.path.join(search_path, pattern), recursive=True)
+        Args:
+            filename (str, optional): The name of the file to search for.
+            filetype (str, optional): The extension of the files to search for (e.g., 'pdf').
+            directory (str, optional): The directory to search in. Defaults to the user's home directory.
 
-        if not files:
-            assistant.speak(f"I couldn't find any {file_type} files in {folder if folder else 'your home directory'}.")
-        else:
-            assistant.speak(f"I found {len(files)} {file_type or ''} files. Here are the first 5:")
-            for f in files[:5]:
-                assistant.speak(os.path.basename(f))
+        Returns:
+            list: A list of paths to the found files.
+        """
+        search_path = self._resolve_folder_path(directory) if directory else os.path.expanduser("~")
 
-        return files
+        found_files = []
+
+        for root, dirs, files in os.walk(search_path):
+            for file in files:
+                # Filter by filetype if provided
+                if filetype and not file.lower().endswith(f".{filetype}"):
+                    continue
+
+                # Filter by filename if provided (case-insensitive)
+                if filename and filename.lower() not in file.lower():
+                    continue
+
+                found_files.append(os.path.join(root, file))
+
+        return found_files
 
     def move_files(self, assistant, file_type, source_folder, dest_folder):
         """Moves files of a certain type from a source to a destination."""
@@ -67,12 +81,17 @@ class FileManagerPlugin(Plugin):
     def handle(self, command, assistant):
         intent, args = command
 
-        if intent == "find_files":
-            # Example args: "PDF in Downloads"
-            parts = args.split(" in ")
-            file_type = parts[0]
-            folder = parts[1] if len(parts) > 1 else None
-            self.find_files(assistant, file_type=file_type, folder=folder)
+        if intent == "find_file":
+            files = self.find_file(**args)
+
+            if not files:
+                search_term = args.get('filename') or args.get('filetype')
+                directory = args.get('directory', 'your computer')
+                assistant.speak(f"I couldn't find any files matching '{search_term}' in {directory}.")
+            else:
+                assistant.speak(f"I found {len(files)} matching files. Here are the top 5:")
+                for f in files[:5]:
+                    assistant.speak(os.path.basename(f))
 
         elif intent == "move_files":
             # Example args: "PDFs from Downloads to Documents"

@@ -29,7 +29,8 @@ matcher.add("close_app", close_app_patterns)
 
 # Pattern for searching the web
 search_patterns = [
-    [{"LOWER": {"IN": ["search", "find", "look", "google"]}}, {"LOWER": "for", "OP": "?"}, {"IS_ALPHA": True, "OP": "+"}]
+    [{"LOWER": {"IN": ["search", "google"]}}, {"LOWER": "for", "OP": "?"}, {"IS_ALPHA": True, "OP": "+"}],
+    [{"LOWER": "look"}, {"LOWER": "for"}, {"IS_ALPHA": True, "OP": "+"}]
 ]
 matcher.add("search", search_patterns)
 
@@ -70,10 +71,17 @@ set_alarm_patterns = [
 matcher.add("set_alarm", set_alarm_patterns)
 
 # Patterns for file management
-find_files_patterns = [
-    [{"LOWER": "find"}, {"LOWER": "my", "OP": "?"}, {"IS_ALPHA": True, "OP": "+"}, {"LOWER": "files"}]
+find_file_patterns = [
+    # "find report.docx"
+    [{"LOWER": {"IN": ["find", "locate"]}}, {"TEXT": {"REGEX": r".*\..*"}}],
+    # "find my presentation" / "find the quarterly report"
+    [{"LOWER": {"IN": ["find", "locate"]}}, {"LOWER": {"IN": ["my", "the", "a"]}, "OP": "?"}, {"IS_ALPHA": True, "OP": "+"}],
+    # "find all pdf files"
+    [{"LOWER": {"IN": ["find", "locate"]}}, {"LOWER": "all", "OP": "?"}, {"LOWER": {"IN": ["pdf", "docx", "txt", "png", "jpg"]}}, {"LOWER": "files"}],
+    # "find my presentation in Documents"
+    [{"LOWER": {"IN": ["find", "locate"]}}, {"LOWER": {"IN": ["my", "the", "a"]}, "OP": "?"}, {"IS_ALPHA": True, "OP": "+"}, {"LOWER": "in"}, {"IS_ALPHA": True, "OP": "+"}]
 ]
-matcher.add("find_files", find_files_patterns)
+matcher.add("find_file", find_file_patterns)
 
 move_files_patterns = [
     [{"LOWER": "move"}, {"LOWER": "all", "OP": "?"}, {"IS_ALPHA": True, "OP": "+"}, {"LOWER": "from"}, {"IS_ALPHA": True, "OP": "+"}, {"LOWER": "to"}, {"IS_ALPHA": True, "OP": "+"}]
@@ -181,17 +189,42 @@ def parse_command(text):
         args = {"contact": contact_part.strip(), "message": message_part.strip()}
         return intent, args
 
+    if intent == "find_file":
+        span = doc[start:end]
+        args = {"filename": None, "filetype": None, "directory": None}
+
+        # Look for a directory
+        if "in" in [token.lower_ for token in span]:
+            parts = " ".join([t.text for t in span]).split(" in ")
+            entity_part = parts[0]
+            args["directory"] = parts[1].strip()
+        else:
+            entity_part = " ".join([t.text for t in span])
+
+        # Remove keywords to isolate the core file name/type
+        keywords = ["find", "locate", "my", "the", "a", "all", "files", "file"]
+        clean_entity = " ".join([word for word in entity_part.split() if word.lower() not in keywords])
+
+        # Check if it's a file type or a filename
+        if clean_entity.lower() in ["pdf", "docx", "txt", "png", "jpg"]:
+            args["filetype"] = clean_entity.lower()
+        else:
+            args["filename"] = clean_entity
+
+        return intent, args
+
+
     # Extract the entity (the part of the text that isn't the keyword)
     span = doc[start:end]
     keywords_to_remove = {
         "open_app": ["open", "launch", "start"],
         "close_app": ["close", "exit", "terminate", "quit"],
-        "search": ["search", "for", "find", "look", "google"],
+        "search": ["search", "google", "look", "for"],
         "answer_question": ["what", "who", "is", "are"],
         "set_reminder": ["set", "a", "reminder", "to"],
         "set_alarm": ["set", "an", "alarm", "for"],
         "play_on_youtube": ["play", "on", "youtube"],
-        "find_files": ["find", "my", "files"],
+        "find_file": ["find", "search", "locate", "my", "the", "a", "all", "files", "file", "in"],
         "move_files": ["move", "all", "from", "to"],
         "learn_face": ["learn", "my", "face", "as"],
         "explain_document": ["read", "explain", "summarize", "and", "the", "file"],
