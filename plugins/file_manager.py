@@ -1,22 +1,20 @@
+from src.plugin_interface import Plugin
 import os
 import shutil
 import glob
-from src.plugin_interface import Plugin
 
 class FileManagerPlugin(Plugin):
     """
-    A plugin to handle file management commands.
+    A plugin to handle advanced file management commands like finding and moving files.
     """
     def get_intent_map(self):
         return {
-            "move_files": self.move_files
+            "find_files": self.handle,
+            "move_files": self.handle
         }
 
     def can_handle(self, command):
-        return False
-
-    def handle(self, command, assistant):
-        pass
+        return False # This plugin is intent-based
 
     def _resolve_folder_path(self, folder_name):
         """Resolves common folder names to their full paths."""
@@ -29,41 +27,70 @@ class FileManagerPlugin(Plugin):
             "music": os.path.join(home, "Music"),
             "videos": os.path.join(home, "Videos"),
         }
-        return folder_map.get(folder_name.lower())
+        return folder_map.get(folder_name.lower(), home) # Default to home dir
 
-    def move_files(self, args, assistant):
-        """
-        Moves files from a source directory to a destination directory.
-        """
-        file_type = args.get("file_type")
-        source = args.get("source")
-        destination = args.get("destination")
+    def find_files(self, assistant, file_type=None, folder=None):
+        """Finds files based on type and/or folder."""
+        search_path = self._resolve_folder_path(folder) if folder else os.path.expanduser("~")
 
-        if not all([file_type, source, destination]):
-            assistant.speak("I'm sorry, I'm missing some information. Please tell me the file type, source, and destination.", is_error=True)
-            return
+        pattern = f"**/*.{file_type.lower() if file_type else '*'}"
+        files = glob.glob(os.path.join(search_path, pattern), recursive=True)
 
-        source_path = self._resolve_folder_path(source)
-        dest_path = self._resolve_folder_path(destination)
+        if not files:
+            assistant.speak(f"I couldn't find any {file_type} files in {folder if folder else 'your home directory'}.")
+        else:
+            assistant.speak(f"I found {len(files)} {file_type or ''} files. Here are the first 5:")
+            for f in files[:5]:
+                assistant.speak(os.path.basename(f))
 
-        if not source_path or not dest_path:
-            assistant.speak("I'm sorry, I don't recognize those folder locations.", is_error=True)
-            return
+        return files
 
-        # Find the files
-        file_extension = file_type.replace("all my", "").replace("all", "").replace("files", "").strip()
-        if file_extension.endswith("s"):
-            file_extension = file_extension[:-1]
-        if not file_extension.startswith("."):
-            file_extension = "." + file_extension
+    def move_files(self, assistant, file_type, source_folder, dest_folder):
+        """Moves files of a certain type from a source to a destination."""
+        source_path = self._resolve_folder_path(source_folder)
+        dest_path = self._resolve_folder_path(dest_folder)
 
-        files_to_move = glob.glob(os.path.join(source_path, f"*{file_extension}"))
+        if not os.path.isdir(dest_path):
+            os.makedirs(dest_path) # Create destination if it doesn't exist
+
+        pattern = f"*.{file_type.lower()}"
+        files_to_move = glob.glob(os.path.join(source_path, pattern))
 
         if not files_to_move:
-            assistant.speak(f"I couldn't find any {file_extension} files in {source}.")
-            return
+            assistant.speak(f"I couldn't find any .{file_type} files in your {source_folder} folder.")
+            return []
 
-        # Ask for confirmation
-        assistant.speak(f"I found {len(files_to_move)} files. Are you sure you want to move them from {source} to {destination}?")
-        assistant.waiting_for_confirmation = True
-        assistant.pending_file_move = {"files": files_to_move, "dest": dest_path}
+        # Return the list of files for the confirmation step
+        return files_to_move
+
+
+    def handle(self, command, assistant):
+        intent, args = command
+
+        if intent == "find_files":
+            # Example args: "PDF in Downloads"
+            parts = args.split(" in ")
+            file_type = parts[0]
+            folder = parts[1] if len(parts) > 1 else None
+            self.find_files(assistant, file_type=file_type, folder=folder)
+
+        elif intent == "move_files":
+            # Example args: "PDFs from Downloads to Documents"
+            parts = args.split(" from ")
+            file_type = parts[0].replace("s", "") # Handle plurals like "PDFs"
+            source_dest = parts[1].split(" to ")
+            source = source_dest[0]
+            dest = source_dest[1]
+
+            files = self.move_files(assistant, file_type, source, dest)
+            if files:
+                # This is where the confirmation flow will be triggered
+                assistant.pending_file_move = {
+                    "files": files,
+                    "dest": self._resolve_folder_path(dest)
+                }
+                assistant.speak(f"I found {len(files)} .{file_type} files to move. Here are the first few:")
+                for f in files[:3]:
+                    assistant.speak(os.path.basename(f))
+                assistant.speak("Shall I proceed with moving them?")
+                assistant.waiting_for_confirmation = True

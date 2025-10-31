@@ -1,56 +1,16 @@
+import cv2
 import threading
 import time
+import face_recognition
+import mediapipe as mp
+from deepface import DeepFace
+import pytesseract
+from ultralytics import YOLO
 from . import face_manager
-
-# --- Graceful Vision Imports ---
-try:
-    import cv2
-    CV2_AVAILABLE = True
-except ImportError:
-    CV2_AVAILABLE = False
-    print("Warning: OpenCV (cv2) not found. Vision system will be disabled.")
-
-try:
-    import face_recognition
-    FACE_REC_AVAILABLE = True
-except ImportError:
-    FACE_REC_AVAILABLE = False
-    print("Warning: face_recognition not found. Face recognition features will be disabled.")
-
-try:
-    import mediapipe as mp
-    MEDIAPIPE_AVAILABLE = True
-except ImportError:
-    MEDIAPIPE_AVAILABLE = False
-    print("Warning: mediapipe not found. Gesture detection will be disabled.")
-
-try:
-    from deepface import DeepFace
-    DEEPFACE_AVAILABLE = True
-except ImportError:
-    DEEPFACE_AVAILABLE = False
-    print("Warning: deepface not found. Emotion detection will be disabled.")
-
-try:
-    import pytesseract
-    PYTESSERACT_AVAILABLE = True
-except ImportError:
-    PYTESSERACT_AVAILABLE = False
-    print("Warning: pytesseract not found. OCR features will be disabled.")
-
-try:
-    from ultralytics import YOLO
-    YOLO_AVAILABLE = True
-except ImportError:
-    YOLO_AVAILABLE = False
-    print("Warning: ultralytics (YOLO) not found. Object detection will be disabled.")
-# --- End Graceful Imports ---
-
 
 class VisionSystem:
     """
     Manages camera access and processes video frames for various AI tasks.
-    Features are gracefully disabled if dependencies are not met.
     """
     def __init__(self, motion_threshold=500000, presence_timeout=5.0):
         # ... (init attributes are the same)
@@ -70,31 +30,13 @@ class VisionSystem:
         self.detected_emotion = None
         self.detected_objects = []
         self._frame_counter = 0
-
-        # Conditionally initialize vision components
-        if not CV2_AVAILABLE:
-            print("VisionSystem disabled due to missing OpenCV.")
-            return
-
-        self.mp_hands = None
-        self.hands = None
-        if MEDIAPIPE_AVAILABLE:
-            self.mp_hands = mp.solutions.hands
-            self.hands = self.mp_hands.Hands(max_num_hands=1, min_detection_confidence=0.7)
-            self.mp_draw = mp.solutions.drawing_utils
-
-        self.yolo_model = None
-        if YOLO_AVAILABLE:
-            try:
-                self.yolo_model = YOLO("yolov8n.pt")
-            except Exception as e:
-                print(f"Warning: Failed to load YOLO model. Object detection disabled. Error: {e}")
-                self.yolo_model = None
+        self.mp_hands = mp.solutions.hands
+        self.hands = self.mp_hands.Hands(max_num_hands=1, min_detection_confidence=0.7)
+        self.mp_draw = mp.solutions.drawing_utils
+        self.yolo_model = YOLO("yolov8n.pt")
 
     def learn_current_user_face(self, name):
         # ... (implementation is the same)
-        if not FACE_REC_AVAILABLE:
-            return "Face recognition is disabled due to missing libraries."
         if not self.camera or not self.camera.isOpened(): return "Camera not available."
         success, frame = self.camera.read()
         if not success: return "Failed to capture image."
@@ -113,7 +55,7 @@ class VisionSystem:
         print(f"Loaded {len(self.known_face_names)} known faces.")
 
     def start(self):
-        if not CV2_AVAILABLE: return
+        # ... (implementation is the same)
         self._load_known_faces()
         if self.is_running: return
         try:
@@ -127,6 +69,7 @@ class VisionSystem:
             print(f"Error initializing camera: {e}"); self.camera = None
 
     def stop(self):
+        # ... (implementation is the same)
         self.is_running = False
         if self.vision_thread: self.vision_thread.join()
         if self.camera: self.camera.release(); self.camera = None
@@ -141,16 +84,16 @@ class VisionSystem:
 
             task_index = self._frame_counter % 5
             if task_index == 0: self._process_presence(frame)
-            elif task_index == 1 and FACE_REC_AVAILABLE: self._process_recognition(frame)
-            elif task_index == 2 and MEDIAPIPE_AVAILABLE: self._process_gestures(frame)
-            elif task_index == 3 and DEEPFACE_AVAILABLE: self._process_emotions(frame)
-            elif task_index == 4 and YOLO_AVAILABLE: self._process_object_detection(frame)
+            elif task_index == 1: self._process_recognition(frame)
+            elif task_index == 2: self._process_gestures(frame)
+            elif task_index == 3: self._process_emotions(frame)
+            else: self._process_object_detection(frame)
 
             self._frame_counter += 1
             time.sleep(0.5) # Balance performance
 
     def _process_presence(self, frame):
-        if not CV2_AVAILABLE: return
+        # ... (implementation is the same)
         gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         gray_frame = cv2.GaussianBlur(gray_frame, (21, 21), 0)
         if self._last_frame is None: self._last_frame = gray_frame; return
@@ -166,7 +109,8 @@ class VisionSystem:
         self._last_frame = gray_frame
 
     def _process_recognition(self, frame):
-        if not self.known_face_encodings or not FACE_REC_AVAILABLE: return
+        # ... (implementation is the same)
+        if not self.known_face_encodings: return
         small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
         rgb_small_frame = small_frame[:, :, ::-1]
         face_locations = face_recognition.face_locations(rgb_small_frame)
@@ -182,7 +126,7 @@ class VisionSystem:
         self.recognized_user = current_recognized_user
 
     def _process_gestures(self, frame):
-        if not self.hands or not MEDIAPIPE_AVAILABLE: return
+        # ... (implementation is the same)
         self.detected_gesture = None
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = self.hands.process(rgb_frame)
@@ -198,7 +142,7 @@ class VisionSystem:
                 except Exception: pass
 
     def capture_and_read_text(self):
-        if not PYTESSERACT_AVAILABLE: return "OCR is disabled due to missing libraries."
+        # ... (implementation is the same)
         if not self.camera or not self.camera.isOpened(): return "Camera not available."
         success, frame = self.camera.read()
         if not success: return "Failed to capture image."
@@ -210,7 +154,7 @@ class VisionSystem:
         except Exception as e: return f"OCR Error: {e}"
 
     def _process_emotions(self, frame):
-        if not DEEPFACE_AVAILABLE: return
+        # ... (implementation is the same)
         self.detected_emotion = None
         try:
             analysis = DeepFace.analyze(frame, actions=['emotion'], enforce_detection=False)
@@ -222,15 +166,19 @@ class VisionSystem:
 
     def _process_object_detection(self, frame):
         """Analyzes a frame for common objects using YOLO."""
-        if not self.yolo_model or not YOLO_AVAILABLE: return
         self.detected_objects = []
         try:
             results = self.yolo_model(frame, verbose=False)
+
+            # Extract names of detected objects
             names = self.yolo_model.names
             for r in results:
                 for c in r.boxes.cls:
                     self.detected_objects.append(names[int(c)])
+
+            # Keep only unique object names
             self.detected_objects = sorted(list(set(self.detected_objects)))
+
         except Exception as e:
             print(f"Object detection error: {e}")
             self.detected_objects = []

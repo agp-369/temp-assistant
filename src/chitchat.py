@@ -1,36 +1,28 @@
-from transformers import pipeline
+from transformers import pipeline, Conversation
 
-# Initialize the text generation model once
+# Initialize the conversational model once
 # Using a smaller, more efficient model suitable for a desktop assistant
-text_generation_pipeline = pipeline("text-generation", model="microsoft/DialoGPT-small")
+conversational_pipeline = pipeline("conversational", model="microsoft/DialoGPT-small")
 
 def get_chitchat_response(text, conversation_history=None):
     """
     Generates a conversational response using a pre-trained model.
     :param text: The user's input.
-    :param conversation_history: A list of past user inputs and bot responses.
+    :param conversation_history: A transformers.Conversation object.
     :return: A tuple of (response_text, updated_conversation_history).
     """
     if conversation_history is None:
-        conversation_history = []
+        conversation_history = Conversation()
 
-    # Format the input for the text-generation pipeline
-    prompt = ""
-    for message in conversation_history:
-        prompt += f"{message['role']}: {message['content']}\n"
-    prompt += f"user: {text}\nassistant:"
+    conversation_history.add_user_input(text)
 
-    # Get the response from the pipeline
-    response_list = text_generation_pipeline(prompt, max_length=100, num_return_sequences=1)
+    # The pipeline returns the full conversation object, now updated with the model's response
+    updated_conversation = conversational_pipeline(conversation_history)
 
-    # The response is the generated text
-    response = response_list[0]['generated_text'].split("assistant:")[-1].strip()
+    # The model's last response is at the end of the generated responses
+    response = updated_conversation.generated_responses[-1]
 
-    # Update the history
-    conversation_history.append({"role": "user", "content": text})
-    conversation_history.append({"role": "assistant", "content": response})
-
-    return response, conversation_history
+    return response, updated_conversation
 
 if __name__ == '__main__':
     # Example usage

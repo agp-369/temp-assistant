@@ -9,6 +9,7 @@ import speech_recognition as sr
 import pvporcupine
 import pyaudio
 import struct
+import pyautogui
 import json
 import importlib.util
 import threading
@@ -176,23 +177,33 @@ class Assistant:
 
     def handle_core_command(self, command, args):
         """Handles the built-in, non-plugin commands."""
-        # Note: 'args' is now a dictionary of named arguments.
         handlers = {
-            "exit": lambda: self.speak("Goodbye!"),
-            "open_app": lambda: self.open_application(args.get("app_name")),
-            "close_app": lambda: self.close_application(args.get("app_name")),
-            "play_youtube": lambda: self.play_on_youtube(args.get("video_title")),
-            "search": lambda: self.perform_web_search(args.get("query")),
-            "answer_question": lambda: self.answer_question(args.get("query")),
+            "exit": lambda a: self.speak("Goodbye!"),
+            "open_app": self.open_application,
+            "close_app": self.close_application,
+            "open_file": self.open_file,
+            "play_youtube": self.play_on_youtube,
+            "type_text": self.type_text,
+            "search": self.perform_web_search,
             "get_time": self.get_time,
+            "get_weather": self.get_weather, # Should be a plugin, here for legacy
+            "greet": self.get_greeting,
             "get_date": self.get_date,
-            "teach_command": lambda: self.teach_command(args.get("command_name"), args.get("actions")),
-            "who_are_you": self.who_are_you,
-            # ... other commands that take specific args
+            "teach_command": lambda a: self.teach_command(a[0], a[1]),
+            "answer_question": self.answer_question,
+            "learn_face": lambda a: self.speak(self.vision.learn_current_user_face(a)),
+            "read_text": self.handle_read_text,
+            "identify_objects": self.handle_identify_objects,
+            "explain_document": self.explain_document
         }
         if command in handlers:
-            handlers[command]()
-            if command == "exit": return False # Signal exit
+            if command == "teach_command":
+                handlers[command](args)
+            elif command == "exit":
+                handlers[command](args)
+                return False # Signal exit
+            else:
+                handlers[command](args)
             return True
         return False
 
@@ -318,7 +329,6 @@ class Assistant:
             if not self.vision.user_present: greeted_users = []
             time.sleep(3)
     def _gesture_control_loop(self):
-        import pyautogui
         while True:
             if self.vision.detected_gesture == "open_palm":
                 self.speak("Open palm detected, pausing media."); pyautogui.press('space'); self.vision.detected_gesture = None
@@ -344,12 +354,4 @@ class Assistant:
     def get_time(self): self.speak(f"The time is {datetime.datetime.now().strftime('%I:%M %p')}.")
     def get_date(self): self.speak(f"Today is {datetime.date.today().strftime('%B %d, %Y')}.")
     def get_greeting(self): self.speak("Hello! How can I help?")
-
-    def who_are_you(self):
-        """Responds with the name of the recognized user."""
-        if self.vision.recognized_user:
-            self.speak(f"I see you, {self.vision.recognized_user}.")
-        else:
-            self.speak("I don't recognize you. You can teach me to recognize you by saying 'learn my face as [your name]'.")
-
     # ... (And so on for other simple commands)

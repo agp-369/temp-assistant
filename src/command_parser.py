@@ -10,154 +10,193 @@ except OSError:
     download("en_core_web_sm")
     nlp = spacy.load("en_core_web_sm")
 
-# --- Intent Definition ---
-# A mapping of intents to their patterns and argument extraction logic.
-INTENT_PATTERNS = {
-    "open_app": {
-        "patterns": [
-            [{"LOWER": {"IN": ["open", "launch", "start"]}}, {"IS_ALPHA": True, "OP": "+"}]
-        ],
-        "args": [{"name": "app_name", "type": "ENT_TYPE", "value": "APP_NAME"}]
-    },
-    "close_app": {
-        "patterns": [
-            [{"LOWER": {"IN": ["close", "exit", "terminate"]}}, {"IS_ALPHA": True, "OP": "+"}]
-        ],
-        "args": [{"name": "app_name", "type": "ENT_TYPE", "value": "APP_NAME"}]
-    },
-    "search": {
-        "patterns": [
-            [{"LOWER": {"IN": ["search", "find", "google"]}}, {"LOWER": "for", "OP": "?"}, {"TEXT": {"REGEX": ".*"}, "OP": "+"}]
-        ],
-        "args": [{"name": "query", "type": "REGEX", "value": "for (.*)"}]
-    },
-    "play_on_youtube": {
-        "patterns": [
-            [{"LOWER": "play"}, {"TEXT": {"REGEX": ".*"}}, {"LOWER": "on"}, {"LOWER": "youtube"}]
-        ],
-        "args": [{"name": "video_title", "type": "REGEX", "value": "play (.*) on youtube"}]
-    },
-    "get_time": {"patterns": [[{"LOWER": "what"}, {"LOWER": "time"}, {"LOWER": "is"}, {"LOWER": "it"}]]},
-    "get_date": {"patterns": [[{"LOWER": "what"}, {"LOWER": "is"}, {"LOWER": "today's"}, {"LOWER": "date"}]]},
-    "who_are_you": {"patterns": [[{"LOWER": "who"}, {"LOWER": "am"}, {"LOWER": "i"}]]},
-    "answer_question": {
-        "patterns": [
-            [{"LOWER": {"IN": ["what", "who"]}}, {"LOWER": {"IN": ["is", "are"]}}, {"TEXT": {"REGEX": ".*"}, "OP": "+"}]
-        ],
-        "args": [{"name": "query", "type": "REGEX", "value": "(is|are) (.*)"}]
-    },
-    "move_files": {
-        "patterns": [
-            [{"LOWER": "move"}, {"OP": "*"}, {"LOWER": "from"}, {"ENT_TYPE": "SRC_DIR", "OP": "+"}, {"LOWER": "to"}, {"ENT_TYPE": "DEST_DIR", "OP": "+"}]
-        ],
-        "args": [
-            {"name": "file_type", "type": "REGEX", "value": "move (.*) from"},
-            {"name": "source", "type": "ENT_TYPE", "value": "SRC_DIR"},
-            {"name": "destination", "type": "ENT_TYPE", "value": "DEST_DIR"}
-        ]
-    },
-     "teach_command": {
-        "patterns": [
-            [{"LOWER": "teach"}, {"LOWER": "command"}, {"TEXT": {"REGEX": ".*?"}}, {"LOWER": "to"}, {"TEXT": {"REGEX": ".*"}}]
-        ],
-        "args": [
-            {"name": "command_name", "type": "REGEX", "value": "command (.*?) to"},
-            {"name": "actions", "type": "REGEX", "value": "to (.*)"}
-        ]
-    },
-    "send_sms": {
-        "patterns": [
-            [{"LOWER": {"IN": ["send", "text"]}}, {"LOWER": "a", "OP": "?"}, {"LOWER": "message", "OP": "?"}, {"LOWER": "to"}, {"LIKE_NUM": True}, {"LOWER": "saying"}, {"TEXT": {"REGEX": ".*"}}]
-        ]
-    },
-    # Add other intents here...
-}
+# --- Intent Patterns ---
+matcher = Matcher(nlp.vocab)
 
-# --- Entity Patterns for Ruler ---
-# This helps spaCy recognize custom entities like APP_NAME, file paths, etc.
-def setup_ruler(nlp_object):
-    if "entity_ruler" not in nlp_object.pipe_names:
-        ruler = nlp_object.add_pipe("entity_ruler", before="ner")
-        patterns = [
-            {"label": "APP_NAME", "pattern": [{"LOWER": {"IN": ["chrome", "vscode", "notepad", "calculator"]}}]},
-            {"label": "SRC_DIR", "pattern": [{"LOWER": {"IN": ["downloads", "documents", "desktop"]}}]},
-            {"label": "DEST_DIR", "pattern": [{"LOWER": {"IN": ["downloads", "documents", "desktop", "pictures"]}}]}
-        ]
-        ruler.add_patterns(patterns)
+# Pattern for opening applications
+open_app_patterns = [
+    [{"LOWER": {"IN": ["open", "launch", "start"]}}, {"IS_ALPHA": True, "OP": "+"}],
+    [{"LOWER": {"IN": ["open", "launch", "start"]}}, {"IS_ALPHA": True, "OP": "+"}, {"IS_ALPHA": True, "OP": "*"}]
+]
+matcher.add("open_app", open_app_patterns)
 
-# --- Main Parser Logic ---
-def initialize_parser():
-    """Initializes the spaCy Matcher and Entity Ruler."""
-    matcher = Matcher(nlp.vocab)
-    for intent, data in INTENT_PATTERNS.items():
-        matcher.add(intent, data["patterns"])
-    setup_ruler(nlp)
-    return matcher
+# Pattern for closing applications
+close_app_patterns = [
+    [{"LOWER": {"IN": ["close", "exit", "terminate", "quit"]}}, {"IS_ALPHA": True, "OP": "+"}],
+    [{"LOWER": {"IN": ["close", "exit", "terminate", "quit"]}}, {"IS_ALPHA": True, "OP": "+"}, {"IS_ALPHA": True, "OP": "*"}]
+]
+matcher.add("close_app", close_app_patterns)
 
-matcher = initialize_parser()
+# Pattern for searching the web
+search_patterns = [
+    [{"LOWER": {"IN": ["search", "find", "look", "google"]}}, {"LOWER": "for", "OP": "?"}, {"IS_ALPHA": True, "OP": "+"}]
+]
+matcher.add("search", search_patterns)
+
+# Pattern for getting the time
+get_time_patterns = [
+    [{"LOWER": "what"}, {"LOWER": "time"}, {"LOWER": "is"}, {"LOWER": "it"}],
+    [{"LOWER": "get"}, {"LOWER": "the"}, {"LOWER": "time"}]
+]
+matcher.add("get_time", get_time_patterns)
+
+# Pattern for answering questions
+answer_question_patterns = [
+    [{"LOWER": {"IN": ["what", "who"]}}, {"LOWER": {"IN": ["is", "are"]}}, {"IS_ALPHA": True, "OP": "+"}]
+]
+matcher.add("answer_question", answer_question_patterns)
+
+# Patterns for system monitoring
+get_cpu_patterns = [
+    [{"LOWER": {"IN": ["what", "check"]}}, {"LOWER": "is"}, {"LOWER": "the"}, {"LOWER": "cpu"}, {"LOWER": "usage"}]
+]
+matcher.add("get_cpu_usage", get_cpu_patterns)
+
+# Patterns for alarms and reminders
+set_reminder_patterns = [
+    [{"LOWER": {"IN": ["set", "create", "add"]}}, {"LOWER": "a", "OP": "?"}, {"LOWER": "reminder"}, {"LOWER": "to"}, {"IS_ALPHA": True, "OP": "+"}]
+]
+matcher.add("set_reminder", set_reminder_patterns)
+
+# Pattern for playing on YouTube
+play_youtube_patterns = [
+    [{"LOWER": "play"}, {"IS_ALPHA": True, "OP": "+"}, {"LOWER": "on"}, {"LOWER": "youtube"}]
+]
+matcher.add("play_on_youtube", play_youtube_patterns)
+
+set_alarm_patterns = [
+    [{"LOWER": {"IN": ["set", "create", "add"]}}, {"LOWER": "an", "OP": "?"}, {"LOWER": "alarm"}, {"LOWER": "for"}, {"IS_ALPHA": True, "OP": "+"}]
+]
+matcher.add("set_alarm", set_alarm_patterns)
+
+# Patterns for file management
+find_files_patterns = [
+    [{"LOWER": "find"}, {"LOWER": "my", "OP": "?"}, {"IS_ALPHA": True, "OP": "+"}, {"LOWER": "files"}]
+]
+matcher.add("find_files", find_files_patterns)
+
+move_files_patterns = [
+    [{"LOWER": "move"}, {"LOWER": "all", "OP": "?"}, {"IS_ALPHA": True, "OP": "+"}, {"LOWER": "from"}, {"IS_ALPHA": True, "OP": "+"}, {"LOWER": "to"}, {"IS_ALPHA": True, "OP": "+"}]
+]
+matcher.add("move_files", move_files_patterns)
+
+# Pattern for learning a face
+learn_face_patterns = [
+    [{"LOWER": "learn"}, {"LOWER": "my"}, {"LOWER": "face"}, {"LOWER": "as"}, {"IS_ALPHA": True, "OP": "+"}]
+]
+matcher.add("learn_face", learn_face_patterns)
+
+# Pattern for reading text via OCR
+read_text_patterns = [
+    [{"LOWER": {"IN": ["read", "scan"]}}, {"LOWER": "this"}, {"LOWER": {"IN": ["document", "page", "text"]}}]
+]
+matcher.add("read_text", read_text_patterns)
+
+# Pattern for identifying objects
+identify_objects_patterns = [
+    [{"LOWER": {"IN": ["what", "identify"]}}, {"LOWER": "do"}, {"LOWER": "you"}, {"LOWER": "see"}],
+    [{"LOWER": "identify"}, {"LOWER": "objects"}]
+]
+matcher.add("identify_objects", identify_objects_patterns)
+
+# Pattern for creating documents
+create_document_patterns = [
+    [{"LOWER": "create"}, {"LOWER": "document"}, {"LOWER": "about"}, {"IS_ALPHA": True, "OP": "+"}]
+]
+matcher.add("create_document", create_document_patterns)
+
+get_memory_patterns = [
+    [{"LOWER": {"IN": ["what", "check"]}}, {"LOWER": "is"}, {"LOWER": "the"}, {"LOWER": "memory"}, {"LOWER": "usage"}]
+]
+matcher.add("get_memory_usage", get_memory_patterns)
+
+get_battery_patterns = [
+    [{"LOWER": {"IN": ["what", "check"]}}, {"LOWER": "is"}, {"LOWER": "the"}, {"LOWER": "battery"}, {"LOWER": "status"}]
+]
+matcher.add("get_battery_status", get_battery_patterns)
+
+# Pattern for teaching a new command
+teach_command_patterns = [
+    [{"LOWER": "teach"}, {"LOWER": "command"}, {"IS_ALPHA": True, "OP": "+"}, {"LOWER": "to"}, {"IS_ALPHA": True, "OP": "+"}]
+]
+matcher.add("teach_command", teach_command_patterns)
+
+# Pattern for explaining a document
+explain_document_patterns = [
+    [{"LOWER": {"IN": ["read", "explain", "summarize"]}}, {"LOWER": "and", "OP": "?"}, {"LOWER": "explain", "OP": "?"}, {"LOWER": "the", "OP": "?"}, {"LOWER": "file", "OP": "?"}, {"IS_ASCII": True, "OP": "+"}]
+]
+matcher.add("explain_document", explain_document_patterns)
+
+# Pattern for sending a WhatsApp message
+send_whatsapp_patterns = [
+    [{"LOWER": {"IN": ["send", "whatsapp"]}}, {"LOWER": "a", "OP": "?"}, {"LOWER": "message", "OP": "?"}, {"LOWER": "to"}, {"IS_ALPHA": True, "OP": "+"}, {"LOWER": "saying"}, {"IS_ALPHA": True, "OP": "+"}]
+]
+matcher.add("send_whatsapp", send_whatsapp_patterns)
+
 
 def parse_command(text):
     """
-    Parses a command using a combination of keyword matching and custom logic.
-    Returns the intent and a dictionary of extracted arguments.
+    Parses a command from the user's speech using spaCy's Matcher.
+    Returns the command and the extracted arguments.
     """
     if not text:
-        return None, {}
+        return None, None
 
-    # Simple keyword-based intent recognition for complex commands
-    if "teach command" in text and "to" in text:
-        intent = "teach_command"
-    elif "play" in text and "on youtube" in text:
-        intent = "play_on_youtube"
-    elif "move" in text and "from" in text and "to" in text:
-        intent = "move_files"
-    elif ("send" in text or "text" in text) and "to" in text and "saying" in text:
-        intent = "send_sms"
-    else:
-        # Fallback to spaCy Matcher for other commands
-        doc = nlp(text)
-        matches = matcher(doc)
-        if not matches:
-            return None, {}
-        best_match = max(matches, key=lambda m: doc[m[1]:m[2]].end - doc[m[1]:m[2]].start)
-        intent = nlp.vocab.strings[best_match[0]]
+    doc = nlp(text)
+    matches = matcher(doc)
 
-    args = {}
-    if intent == 'teach_command':
+    if not matches:
+        return None, None
+
+    # Get the best match (the one with the longest span)
+    best_match = max(matches, key=lambda m: m[2] - m[1])
+    match_id, start, end = best_match
+    intent = nlp.vocab.strings[match_id]
+
+    # Special handling for the 'teach_command' intent
+    if intent == "teach_command":
+        span = doc[start:end]
+        # Extract command name and actions
+        command_name_part = []
+        actions_part = []
+        parsing_actions = False
+        for token in span:
+            if token.lower_ == "to":
+                parsing_actions = True
+                continue
+            if not parsing_actions and token.lower_ not in ["teach", "command"]:
+                command_name_part.append(token.text)
+            elif parsing_actions:
+                actions_part.append(token.text)
+
+        command_name = " ".join(command_name_part)
+        actions = " ".join(actions_part).split(" and then ")
+        return intent, (command_name, actions)
+
+    # Custom argument extraction for specific intents
+    if intent == "send_whatsapp":
         parts = text.split(' to ')
-        command_part = parts[0].replace('teach command', '').strip()
-        actions_part = parts[1]
-        args['command_name'] = command_part
-        args['actions'] = [a.strip() for a in actions_part.split(' and then ')]
-    elif intent == 'play_on_youtube':
-        args['video_title'] = text.replace('play', '').replace('on youtube', '').strip()
-    elif intent == 'move_files':
-        parts = text.split(' from ')
-        file_type = parts[0].replace('move', '').strip()
-        source_dest = parts[1].split(' to ')
-        args['file_type'] = file_type
-        args['source'] = source_dest[0].strip()
-        args['destination'] = source_dest[1].strip()
-    elif intent == 'send_sms':
-        parts = text.split(' to ')
-        phone_part = parts[1].split(' saying ')[0]
+        contact_part = parts[1].split(' saying ')[0]
         message_part = parts[1].split(' saying ')[1]
-        args['to_number'] = phone_part.strip()
-        args['message'] = message_part.strip()
-    else: # Default argument extraction for Matcher-based intents
-        span = doc[best_match[1]:best_match[2]]
-        if intent == 'open_app':
-            args['app_name'] = " ".join([token.text for token in span if token.lower_ not in ["open", "launch", "start"]])
-        elif intent == 'close_app':
-            args['app_name'] = " ".join([token.text for token in span if token.lower_ not in ["close", "exit", "terminate"]])
-        elif intent == 'search':
-            args['query'] = " ".join([token.text for token in span if token.lower_ not in ["search", "for", "find", "google"]])
-        elif intent == 'answer_question':
-            args['query'] = " ".join([token.text for token in span if token.lower_ not in ["what", "is", "who", "are"]])
+        args = {"contact": contact_part.strip(), "message": message_part.strip()}
+        return intent, args
 
-    # Clean up any empty args that may result
-    for key, value in list(args.items()):
-        if not value:
-            del args[key]
+    # Extract the entity (the part of the text that isn't the keyword)
+    span = doc[start:end]
+    keywords_to_remove = {
+        "open_app": ["open", "launch", "start"],
+        "close_app": ["close", "exit", "terminate", "quit"],
+        "search": ["search", "for", "find", "look", "google"],
+        "answer_question": ["what", "who", "is", "are"],
+        "set_reminder": ["set", "a", "reminder", "to"],
+        "set_alarm": ["set", "an", "alarm", "for"],
+        "play_on_youtube": ["play", "on", "youtube"],
+        "find_files": ["find", "my", "files"],
+        "move_files": ["move", "all", "from", "to"],
+        "learn_face": ["learn", "my", "face", "as"],
+        "explain_document": ["read", "explain", "summarize", "and", "the", "file"],
+    }.get(intent, [])
 
-    return intent, args
+    entity = " ".join([token.text for token in span if token.lower_ not in keywords_to_remove])
+
+    return intent, entity.strip()

@@ -1,2 +1,0 @@
-dlib
-face_recognition
