@@ -159,7 +159,8 @@ class Assistant:
                 return True
 
         # 3. Task Planner
-        if not from_plan: # Avoid recursive planning
+        if not from_plan:  # Avoid recursive planning
+            self.update_status("Thinking of a plan...")
             plan = self.planner.create_plan(command_str)
             if plan:
                 self.planner.execute_plan(plan)

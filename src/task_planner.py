@@ -1,3 +1,5 @@
+import time
+
 class TaskPlanner:
     """
     Decomposes a high-level goal into a sequence of executable sub-tasks.
@@ -24,6 +26,16 @@ class TaskPlanner:
                 f"create document about {topic}"
             ]
 
+        # Rule 2: Proof-of-Concept "Workday Startup"
+        # This is a hard-coded example of a multi-step task.
+        if "start my workday" in goal or "workday startup" in goal:
+            # For this example, we assume 'chrome' and 'notepad' are applications
+            # the assistant knows how to open via the 'open_app' command.
+            return [
+                "open chrome",
+                "open notepad"
+            ]
+
         # Add more rules here for other complex tasks...
 
         return None
@@ -33,9 +45,9 @@ class TaskPlanner:
         self.assistant.speak(f"Okay, I'm starting the plan. It has {len(plan)} steps.")
         for i, step in enumerate(plan):
             self.assistant.speak(f"Step {i+1}: {step}")
-            # We will need to enhance process_command to handle this flow
-            # For now, we'll just simulate the action
-            self.assistant.process_command(step)
+            # The 'from_plan=True' flag prevents recursive planning.
+            self.assistant.process_command(step, from_plan=True)
+            time.sleep(1) # Add a small delay between steps
         self.assistant.speak("I have completed the plan.")
 
 if __name__ == '__main__':
