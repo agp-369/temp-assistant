@@ -24,6 +24,7 @@ from . import task_planner
 from . import memory_manager
 from . import document_reader
 from . import llm_handler
+from . import gesture_manager
 
 load_dotenv()
 
@@ -47,6 +48,7 @@ class Assistant:
         # Cognitive Core
         self.planner = task_planner.TaskPlanner(self)
         self.memory = memory_manager.MemoryManager()
+        self.gesture_manager = gesture_manager.GestureManager()
         self.last_summary = None # To pass context between plan steps
 
         # Voice Engine, SR, and other setups...
@@ -195,7 +197,8 @@ class Assistant:
             "learn_face": lambda a: self.speak(self.vision.learn_current_user_face(a)),
             "read_text": self.handle_read_text,
             "identify_objects": self.handle_identify_objects,
-            "explain_document": self.explain_document
+            "explain_document": self.explain_document,
+            "teach_gesture": self.teach_gesture
         }
         if command in handlers:
             if command == "teach_command":
@@ -233,6 +236,26 @@ class Assistant:
         objects = self.vision.detected_objects
         if not objects: self.speak("I don't see any recognizable objects.")
         else: self.speak(f"I can see a {', a '.join(objects)}.")
+
+    def teach_gesture(self, args):
+        """Handles the 'teach_gesture' command."""
+        if not args or "gesture_name" not in args or "command_to_learn" not in args:
+            self.speak("I didn't understand the gesture or the command. Please try again.")
+            return
+
+        gesture_name = args["gesture_name"]
+        command_to_learn = args["command_to_learn"]
+
+        # Check if the gesture is one the VisionSystem can recognize
+        # This list should be updated if more gestures are added.
+        valid_gestures = ["open_palm", "thumbs_up", "closed_fist", "index_pointing"]
+        if gesture_name not in valid_gestures:
+            self.speak(f"Sorry, '{gesture_name.replace('_', ' ')}' is not a gesture I can learn.")
+            self.speak(f"I can learn: {', '.join([g.replace('_', ' ') for g in valid_gestures])}.")
+            return
+
+        self.gesture_manager.add_gesture_mapping(gesture_name, command_to_learn)
+        self.speak(f"Okay, I've learned that the {gesture_name.replace('_', ' ')} gesture means '{command_to_learn}'.")
 
     def explain_document(self, file_path):
         """
@@ -330,10 +353,34 @@ class Assistant:
             if not self.vision.user_present: greeted_users = []
             time.sleep(3)
     def _gesture_control_loop(self):
+        last_executed_gesture = None
+        last_execution_time = 0
+        cooldown = 3 # Cooldown in seconds to prevent rapid re-triggering
+
         while True:
-            if self.vision.detected_gesture == "open_palm":
-                self.speak("Open palm detected, pausing media."); pyautogui.press('space'); self.vision.detected_gesture = None
-            time.sleep(1)
+            detected_gesture = self.vision.detected_gesture
+
+            if detected_gesture:
+                # Check if cooldown has passed since the last execution of the *same* gesture
+                if detected_gesture == last_executed_gesture and (time.time() - last_execution_time) < cooldown:
+                    time.sleep(0.5)
+                    continue
+
+                command = self.gesture_manager.get_command_for_gesture(detected_gesture)
+                if command:
+                    self.speak(f"Gesture '{detected_gesture.replace('_', ' ')}' detected, running command: {command}")
+                    # Process the command in a new thread to avoid blocking the gesture loop
+                    threading.Thread(target=self.process_command, args=(command,), daemon=True).start()
+
+                    # Update last executed gesture and time
+                    last_executed_gesture = detected_gesture
+                    last_execution_time = time.time()
+
+                # Reset the detected gesture in the vision system to avoid re-triggering
+                # even if there's no command associated with it.
+                self.vision.detected_gesture = None
+
+            time.sleep(0.5) # Check for gestures more frequently
     def _mood_awareness_loop(self):
         suggestion_made = False
         while True:

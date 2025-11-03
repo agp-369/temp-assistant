@@ -141,6 +141,12 @@ send_whatsapp_patterns = [
 ]
 matcher.add("send_whatsapp", send_whatsapp_patterns)
 
+# Pattern for teaching a new gesture
+teach_gesture_patterns = [
+    [{"LOWER": "teach"}, {"LOWER": "the", "OP": "?"}, {"IS_ALPHA": True, "OP": "+"}, {"LOWER": "gesture"}, {"LOWER": "to"}, {"OP": "+"}]
+]
+matcher.add("teach_gesture", teach_gesture_patterns)
+
 
 def parse_command(text):
     """
@@ -238,6 +244,27 @@ def parse_command(text):
         except ValueError:
             # Fallback if the structure isn't as expected
             return intent, " ".join([t.text for t in span if t.lower_ not in ["move", "all", "from", "to"]])
+
+    if intent == "teach_gesture":
+        span = doc[start:end]
+        text = span.text
+
+        try:
+            # e.g., "teach the thumbs_up gesture to next track"
+            parts = text.split(" gesture to ")
+            gesture_part = parts[0].replace("teach", "").replace("the", "").strip()
+            command_part = parts[1].strip()
+
+            # The gesture name in mediapipe is usually underscore_separated
+            gesture_name = gesture_part.replace(" ", "_")
+
+            args = {
+                "gesture_name": gesture_name,
+                "command_to_learn": command_part
+            }
+            return intent, args
+        except Exception:
+            return intent, None # Let the handler deal with parsing errors
 
 
     # Extract the entity (the part of the text that isn't the keyword)

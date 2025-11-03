@@ -125,21 +125,59 @@ class VisionSystem:
                 break
         self.recognized_user = current_recognized_user
 
+    def _classify_gesture(self, hand_landmarks):
+        """Classifies a gesture based on hand landmark positions."""
+        # Get the landmarks list
+        lm = hand_landmarks.landmark
+        mp_hands = self.mp_hands
+
+        # Helper function to check if a finger is extended vertically
+        def is_finger_extended(tip_landmark, pip_landmark):
+            return lm[tip_landmark].y < lm[pip_landmark].y
+
+        # Check the state of each finger
+        index_extended = is_finger_extended(mp_hands.HandLandmark.INDEX_FINGER_TIP, mp_hands.HandLandmark.INDEX_FINGER_PIP)
+        middle_extended = is_finger_extended(mp_hands.HandLandmark.MIDDLE_FINGER_TIP, mp_hands.HandLandmark.MIDDLE_FINGER_PIP)
+        ring_extended = is_finger_extended(mp_hands.HandLandmark.RING_FINGER_TIP, mp_hands.HandLandmark.RING_FINGER_PIP)
+        pinky_extended = is_finger_extended(mp_hands.HandLandmark.PINKY_TIP, mp_hands.HandLandmark.PINKY_PIP)
+
+        # A more robust thumb check for 'thumbs up'
+        # The thumb tip should be above the index finger's knuckle (MCP joint)
+        thumb_tip_y = lm[mp_hands.HandLandmark.THUMB_TIP].y
+        index_mcp_y = lm[mp_hands.HandLandmark.INDEX_FINGER_MCP].y
+
+        # --- Gesture Rules (from most specific to least specific) ---
+
+        # Thumbs Up: Only thumb is up, other fingers are curled
+        if thumb_tip_y < index_mcp_y and not index_extended and not middle_extended and not ring_extended and not pinky_extended:
+            return "thumbs_up"
+
+        # Index Pointing: Only index finger is extended
+        if index_extended and not middle_extended and not ring_extended and not pinky_extended:
+            return "index_pointing"
+
+        # Open Palm: All four main fingers are extended
+        if index_extended and middle_extended and ring_extended and pinky_extended:
+            return "open_palm"
+
+        # Closed Fist: None of the four main fingers are extended
+        # This check runs after the more specific 'thumbs_up' and 'index_pointing' checks
+        if not index_extended and not middle_extended and not ring_extended and not pinky_extended:
+            return "closed_fist"
+
+        return None
+
     def _process_gestures(self, frame):
-        # ... (implementation is the same)
         self.detected_gesture = None
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = self.hands.process(rgb_frame)
+
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
-                try:
-                    thumb_tip = hand_landmarks.landmark[self.mp_hands.HandLandmark.THUMB_TIP]
-                    thumb_ip = hand_landmarks.landmark[self.mp_hands.HandLandmark.THUMB_IP]
-                    index_tip = hand_landmarks.landmark[self.mp_hands.HandLandmark.INDEX_FINGER_TIP]
-                    index_pip = hand_landmarks.landmark[self.mp_hands.HandLandmark.INDEX_FINGER_PIP]
-                    if (thumb_tip.x > thumb_ip.x and index_tip.y < index_pip.y):
-                        self.detected_gesture = "open_palm"; break
-                except Exception: pass
+                gesture = self._classify_gesture(hand_landmarks)
+                if gesture:
+                    self.detected_gesture = gesture
+                    break # Found a gesture, no need to check other hands
 
     def capture_and_read_text(self):
         # ... (implementation is the same)
