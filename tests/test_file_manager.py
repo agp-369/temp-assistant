@@ -97,5 +97,80 @@ class TestFileManagerPlugin(unittest.TestCase):
         mock_find_file.assert_called_once_with(filename='nonexistent')
         mock_assistant.speak.assert_called_once_with("I couldn't find any files matching 'nonexistent' in your computer.")
 
+    @patch('plugins.file_manager.os.makedirs')
+    @patch('plugins.file_manager.os.path.isdir', return_value=False)
+    @patch('plugins.file_manager.os.walk')
+    @patch('plugins.file_manager.os.path.expanduser')
+    def test_move_files_logic(self, mock_expanduser, mock_walk, mock_isdir, mock_makedirs):
+        # Mock home directory for consistent paths
+        mock_expanduser.side_effect = lambda p: p.replace('~', '/home/user')
+
+        # Simulate os.walk finding one file
+        mock_walk.return_value = [
+            ('/home/user/Downloads', [], ['report.pdf', 'image.jpg']),
+        ]
+
+        files_to_move, dest_path = self.plugin.move_files(
+            file_type='pdf',
+            source_folder='Downloads',
+            dest_folder='Documents'
+        )
+
+        # Assert destination directory creation was attempted
+        mock_isdir.assert_called_once()
+        mock_makedirs.assert_called_once_with('/home/user/Documents')
+
+        # Assert the correct file was identified
+        self.assertEqual(len(files_to_move), 1)
+        self.assertIn('/home/user/Downloads/report.pdf', files_to_move)
+
+        # Assert the correct destination path was returned
+        self.assertEqual(dest_path, '/home/user/Documents')
+
+    @patch.object(FileManagerPlugin, 'move_files')
+    def test_handle_move_files_found(self, mock_move_files):
+        # Mock the return value of the core move_files logic
+        mock_move_files.return_value = (
+            ['/path/to/doc.pdf'], '/path/to/dest'
+        )
+        mock_assistant = MagicMock()
+
+        command = ("move_files", {
+            "file_type": "pdf",
+            "source_folder": "Downloads",
+            "dest_folder": "Documents"
+        })
+        self.plugin.handle(command, mock_assistant)
+
+        # Check that the confirmation flow was correctly triggered
+        self.assertTrue(mock_assistant.waiting_for_confirmation)
+        self.assertIsNotNone(mock_assistant.pending_file_move)
+        self.assertEqual(mock_assistant.pending_file_move['dest'], '/path/to/dest')
+
+        # Check that the assistant spoke the correct messages
+        mock_assistant.speak.assert_any_call("I found 1 .pdf files to move. Here are the first few:")
+        mock_assistant.speak.assert_any_call("doc.pdf")
+        mock_assistant.speak.assert_any_call("Shall I proceed with moving them?")
+
+    @patch.object(FileManagerPlugin, 'move_files')
+    def test_handle_move_files_not_found(self, mock_move_files):
+        # Mock the return value for when no files are found
+        mock_move_files.return_value = ([], None)
+        mock_assistant = MagicMock()
+        mock_assistant.waiting_for_confirmation = False # Explicitly set initial state
+
+        command = ("move_files", {
+            "file_type": "txt",
+            "source_folder": "Desktop",
+            "dest_folder": "Archive"
+        })
+        self.plugin.handle(command, mock_assistant)
+
+        # Check that the 'not found' message was spoken
+        mock_assistant.speak.assert_called_once_with("I couldn't find any .txt files in your Desktop folder.")
+        # Ensure confirmation flow was NOT triggered
+        self.assertFalse(mock_assistant.waiting_for_confirmation)
+
+
 if __name__ == '__main__':
     unittest.main()

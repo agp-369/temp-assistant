@@ -213,6 +213,32 @@ def parse_command(text):
 
         return intent, args
 
+    if intent == "move_files":
+        span = doc[start:end]
+        text = span.text
+
+        # Split by " from " and " to "
+        try:
+            # Remove the initial "move" keyword part to get to the core entities
+            _, entity_text = text.split(" ", 1)
+
+            file_type_part, rest = entity_text.split(" from ", 1)
+            source, dest = rest.split(" to ", 1)
+
+            # Clean up keywords from file_type
+            keywords = ["all", "files"]
+            clean_file_type = " ".join([word for word in file_type_part.split() if word.lower() not in keywords])
+
+            args = {
+                "file_type": clean_file_type.replace("s", "").strip(), # Handle plurals
+                "source_folder": source.strip(),
+                "dest_folder": dest.strip()
+            }
+            return intent, args
+        except ValueError:
+            # Fallback if the structure isn't as expected
+            return intent, " ".join([t.text for t in span if t.lower_ not in ["move", "all", "from", "to"]])
+
 
     # Extract the entity (the part of the text that isn't the keyword)
     span = doc[start:end]
