@@ -1,28 +1,39 @@
-from transformers import pipeline, Conversation
+from transformers import pipeline
 
-# Initialize the conversational model once
-# Using a smaller, more efficient model suitable for a desktop assistant
-conversational_pipeline = pipeline("conversational", model="microsoft/DialoGPT-small")
+# Initialize the text generation model once
+# Using a smaller model suitable for a desktop assistant
+text_generation_pipeline = pipeline("text-generation", model="microsoft/DialoGPT-small")
 
 def get_chitchat_response(text, conversation_history=None):
     """
-    Generates a conversational response using a pre-trained model.
+    Generates a conversational response using a text generation model.
     :param text: The user's input.
-    :param conversation_history: A transformers.Conversation object.
+    :param conversation_history: A list of past turns in the conversation.
     :return: A tuple of (response_text, updated_conversation_history).
     """
     if conversation_history is None:
-        conversation_history = Conversation()
+        conversation_history = []
 
-    conversation_history.add_user_input(text)
+    # Format the conversation history into a single prompt string
+    prompt = ""
+    for turn in conversation_history:
+        prompt += turn + "\n"
+    prompt += f"You: {text}\nNora:"
 
-    # The pipeline returns the full conversation object, now updated with the model's response
-    updated_conversation = conversational_pipeline(conversation_history)
+    # Generate the response
+    generated_text = text_generation_pipeline(
+        prompt,
+        max_length=100,
+        pad_token_id=text_generation_pipeline.tokenizer.eos_token_id
+    )[0]['generated_text']
 
-    # The model's last response is at the end of the generated responses
-    response = updated_conversation.generated_responses[-1]
+    # Extract only the newly generated response from Nora
+    response = generated_text.split("Nora:")[-1].strip()
 
-    return response, updated_conversation
+    # Update the history
+    updated_history = conversation_history + [f"You: {text}", f"Nora: {response}"]
+
+    return response, updated_history
 
 if __name__ == '__main__':
     # Example usage

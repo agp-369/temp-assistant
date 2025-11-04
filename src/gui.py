@@ -280,13 +280,10 @@ class AssistantGUI(ctk.CTk):
             threading.Thread(target=self.process_and_handle_exit, args=(command,), daemon=True).start()
 
     def activate_voice(self):
-        self.update_conversation("You: (Listening for voice command...)", is_user=True)
-        threading.Thread(target=self.listen_and_process, daemon=True).start()
-
-    def listen_and_process(self):
-        command = self.assistant.listen_for_command()
-        if command:
-            self.process_and_handle_exit(command)
+        # This button will now trigger the continuous listening mode directly
+        if not self.assistant.is_listening:
+            # Start the loop in a new thread so it doesn't block the GUI
+            threading.Thread(target=self.assistant._continuous_listen_loop, daemon=True).start()
 
     def process_and_handle_exit(self, command):
         if not self.assistant.process_command(command):

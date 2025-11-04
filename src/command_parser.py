@@ -147,6 +147,22 @@ teach_gesture_patterns = [
 ]
 matcher.add("teach_gesture", teach_gesture_patterns)
 
+# Pattern for the "go to sleep" command
+go_to_sleep_patterns = [
+    [{"LOWER": "go"}, {"LOWER": "to"}, {"LOWER": "sleep"}],
+    [{"LOWER": "stop"}, {"LOWER": "listening"}],
+    [{"LOWER": "that"}, {"LOWER": "'s"}, {"LOWER": "all"}]
+]
+matcher.add("go_to_sleep", go_to_sleep_patterns)
+
+# Pattern for the "go to sleep" command
+go_to_sleep_patterns = [
+    [{"LOWER": "go"}, {"LOWER": "to"}, {"LOWER": "sleep"}],
+    [{"LOWER": "stop"}, {"LOWER": "listening"}],
+    [{"LOWER": "that"}, {"LOWER": "'s"}, {"LOWER": "all"}]
+]
+matcher.add("go_to_sleep", go_to_sleep_patterns)
+
 
 def parse_command(text):
     """

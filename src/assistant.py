@@ -37,6 +37,7 @@ class Assistant:
     def __init__(self, output_callback=None, status_callback=None):
         # ... (most init is the same)
         self.config = self.load_config()
+        self.is_listening = False # State for continuous listening
         self.assistant_name = self.config.get("assistant_name", "Nora")
         self.wake_word = self.config.get("wake_word", "porcupine")
         self.output_callback = output_callback
@@ -74,7 +75,32 @@ class Assistant:
         for thread in self.threads.values():
             thread.start()
 
-    # ... (speak, load_config, load_plugins, listen methods are the same)
+    def load_config(self):
+        """Loads the configuration from config.json."""
+        if os.path.exists('config.json'):
+            with open('config.json', 'r') as f:
+                return json.load(f)
+        return {}
+
+    def load_plugins(self):
+        """Loads all plugins from the 'plugins' directory."""
+        plugins = []
+        plugin_command_map = {}
+        plugin_dir = 'plugins'
+        for filename in os.listdir(plugin_dir):
+            if filename.endswith(".py") and not filename.startswith("__"):
+                module_name = filename[:-3]
+                spec = importlib.util.spec_from_file_location(module_name, os.path.join(plugin_dir, filename))
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                for name, cls in module.__dict__.items():
+                    if isinstance(cls, type) and issubclass(cls, Plugin) and cls is not Plugin:
+                        plugin_instance = cls()
+                        plugins.append(plugin_instance)
+                        for intent in plugin_instance.get_intent_map().keys():
+                            plugin_command_map[intent] = plugin_instance
+        return plugins, plugin_command_map
+
     def speak(self, text, is_error=False):
         if is_error: text = f"Error: {text}"
         if self.output_callback: self.output_callback(text)
@@ -82,25 +108,30 @@ class Assistant:
         try: self.engine.say(text); self.engine.runAndWait()
         except Exception as e: print(f"TTS Error: {e}")
 
-    def listen_for_command(self):
-        """Uses the microphone to listen for a command and returns the recognized text."""
+    def listen_for_command(self, timeout=5, initial_prompt=True):
+        """
+        Uses the microphone to listen for a command and returns the recognized text.
+        Includes a timeout for continuous listening mode.
+        """
         if self.status_callback: self.status_callback("Listening...")
         with sr.Microphone() as source:
-            self.recognizer.adjust_for_ambient_noise(source)
-            self.speak("How can I help?")
+            self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
+            if initial_prompt:
+                self.speak("How can I help?")
+
             try:
-                audio = self.recognizer.listen(source, timeout=5, phrase_time_limit=5)
+                audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=7)
                 if self.status_callback: self.status_callback("Recognizing...")
                 command = self.recognizer.recognize_google(audio)
                 return command.lower()
             except sr.WaitTimeoutError:
-                self.speak("I didn't hear anything. Please try again.")
+                return None # Return None on timeout, don't speak
             except sr.UnknownValueError:
                 self.speak("Sorry, I couldn't understand that.")
             except sr.RequestError as e:
                 self.speak(f"Could not request results; {e}", is_error=True)
             finally:
-                if self.status_callback: self.status_callback("Ready")
+                if self.status_callback and not self.is_listening: self.status_callback("Ready")
         return None
 
     def process_command(self, command_str, from_plan=False):
@@ -198,7 +229,8 @@ class Assistant:
             "read_text": self.handle_read_text,
             "identify_objects": self.handle_identify_objects,
             "explain_document": self.explain_document,
-            "teach_gesture": self.teach_gesture
+            "teach_gesture": self.teach_gesture,
+            "go_to_sleep": self.go_to_sleep
         }
         if command in handlers:
             if command == "teach_command":
@@ -392,6 +424,12 @@ class Assistant:
                     self.pending_web_search_query = "uplifting instrumental music"; suggestion_made = True
             if not self.vision.user_present: suggestion_made = False
             time.sleep(10)
+
+    def _context_awareness_loop(self):
+        """Placeholder for context awareness loop."""
+        while True:
+            time.sleep(10)
+
     def play_on_youtube(self, query):
         if not query: self.speak("What should I play?"); return
         self.speak(f"Playing {query} on YouTube.")
@@ -403,3 +441,84 @@ class Assistant:
     def get_date(self): self.speak(f"Today is {datetime.date.today().strftime('%B %d, %Y')}.")
     def get_greeting(self): self.speak("Hello! How can I help?")
     # ... (And so on for other simple commands)
+
+    def go_to_sleep(self, args=None):
+        """Stops the continuous listening loop."""
+        if self.is_listening:
+            self.speak("Okay, going back to sleep.")
+            self.is_listening = False
+
+    def _continuous_listen_loop(self):
+        """The main loop for continuous command listening."""
+        self.is_listening = True
+        self.speak("I'm listening.")
+        timeout = self.config.get("continuous_listen_timeout", 15)
+        last_command_time = time.time()
+
+        while self.is_listening:
+            if time.time() - last_command_time > timeout:
+                self.speak("Timeout reached. Going back to sleep.")
+                self.is_listening = False
+                break
+
+            command = self.listen_for_command(timeout=5, initial_prompt=False)
+            if command:
+                last_command_time = time.time() # Reset timeout on successful command
+                # Check for the sleep command first
+                parsed_command, _ = parse_command(command)
+                if parsed_command == "go_to_sleep":
+                    self.go_to_sleep()
+                    break # Exit the loop
+
+                # Process any other command
+                self.process_command(command)
+
+    def listen_for_wake_word(self):
+        """Listens for the wake word and triggers the continuous listening loop."""
+        if not PICOVOICE_ACCESS_KEY:
+            print("Picovoice access key not found. Wake word detection is disabled.")
+            # Fallback to a simple input loop for testing without a key
+            while True:
+                if input("Type 'wake' to start listening: ").lower() == 'wake':
+                    self._continuous_listen_loop()
+            return
+
+        porcupine = None
+        pa = None
+        audio_stream = None
+        try:
+            porcupine = pvporcupine.create(
+                access_key=PICOVOICE_ACCESS_KEY,
+                keyword_paths=[pvporcupine.KEYWORD_PATHS[self.wake_word]]
+            )
+            pa = pyaudio.PyAudio()
+            audio_stream = pa.open(
+                rate=porcupine.sample_rate,
+                channels=1,
+                format=pyaudio.paInt16,
+                input=True,
+                frames_per_buffer=porcupine.frame_length
+            )
+
+            print(f"Listening for '{self.wake_word}'...")
+            if self.status_callback: self.status_callback("Ready (Listening for wake word)")
+
+            while True:
+                pcm = audio_stream.read(porcupine.frame_length)
+                pcm = struct.unpack_from("h" * porcupine.frame_length, pcm)
+
+                if porcupine.process(pcm) >= 0:
+                    print(f"Wake word '{self.wake_word}' detected!")
+                    self._continuous_listen_loop()
+                    print(f"Listening for '{self.wake_word}'...") # Back to wake word listening
+                    if self.status_callback: self.status_callback("Ready (Listening for wake word)")
+
+        except Exception as e:
+            print(f"Error with wake word detection: {e}")
+        finally:
+            if audio_stream is not None:
+                audio_stream.close()
+            if pa is not None:
+                pa.terminate()
+            if porcupine is not None:
+                porcupine.delete()
